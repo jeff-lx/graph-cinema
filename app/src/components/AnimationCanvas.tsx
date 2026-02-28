@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import { ColorValue } from '../types';
 
 export interface AnimationCanvasRef {
   play: () => void;
@@ -6,7 +7,7 @@ export interface AnimationCanvasRef {
   stop: () => void;
   restart: () => void;
   seek: (time: number) => void;
-  startRecording: (format: 'webm' | 'mp4', onComplete: () => void) => void;
+  startRecording: (format: 'webm' | 'mp4', framerate: number, webmCodec: 'vp8' | 'vp9', transparentBg: boolean, onComplete: () => void) => void;
   stopRecording: () => void;
 }
 
@@ -25,17 +26,19 @@ interface Props {
   outlineWidth: number;
   outlineStyle: 'solid' | 'dotted';
   outlineDashLength: number;
-  outline1Color: string;
-  outline2Color: string;
+  outline1Color: ColorValue;
+  outline2Color: ColorValue;
   pointRadius: number;
   headShape: 'circle' | 'triangle' | 'star' | 'diamond' | 'hex';
   easing: string;
   customBezier: { x1: number, y1: number, x2: number, y2: number };
-  line1Color: string;
-  line2Color: string;
+  line1Color: ColorValue;
+  line2Color: ColorValue;
+  lineCap: 'round' | 'butt' | 'square';
+  outlineCap: 'round' | 'butt' | 'square';
   particleSize: number;
-  particleColor1: string;
-  particleColor2: string;
+  particleColor1: ColorValue;
+  particleColor2: ColorValue;
   particleShape: 'circle' | 'triangle' | 'star' | 'diamond' | 'hex';
   particleEmissionRate: number;
   targetPoints: {x: number, y: number}[];
@@ -156,7 +159,7 @@ const hexToRgb = (hex: string) => {
 
 const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({ 
   duration, revealDuration, mode, backgroundColor, showGrid, showBloom, backgroundImage,
-  lineWidth, lineStyle, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier, line1Color, line2Color,
+  lineWidth, lineStyle, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier, line1Color, line2Color, lineCap, outlineCap,
   particleSize, particleColor1, particleColor2, particleShape, particleEmissionRate,
   targetPoints, baselinePoints, showTarget, showBaseline, targetResolution,
   isEditorMode, onTargetPointsChange, onBaselinePointsChange, onTimeUpdate,
@@ -240,25 +243,27 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       stateRef.current.lastTime = performance.now();
       onPlayStateChange(true);
     },
-    startRecording: (format, onComplete) => {
+    startRecording: (format, framerate, webmCodec, transparentBg, onComplete) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
       stateRef.current.exportFormat = format;
-      stateRef.current.transparentBg = false;
+      stateRef.current.transparentBg = format === 'webm' ? transparentBg : false;
       stateRef.current.onExportComplete = onComplete;
       
-      const stream = canvas.captureStream(60);
+      const stream = canvas.captureStream(framerate);
       
       let mimeType = '';
       if (format === 'mp4' && MediaRecorder.isTypeSupported('video/mp4')) {
         mimeType = 'video/mp4';
-      } else if (MediaRecorder.isTypeSupported('video/webm; codecs=vp9')) {
-        mimeType = 'video/webm; codecs=vp9';
-      } else if (MediaRecorder.isTypeSupported('video/webm; codecs=vp8')) {
-        mimeType = 'video/webm; codecs=vp8';
-      } else if (MediaRecorder.isTypeSupported('video/webm')) {
-        mimeType = 'video/webm';
+      } else if (format === 'webm') {
+        if (webmCodec === 'vp9' && MediaRecorder.isTypeSupported('video/webm; codecs=vp9')) {
+          mimeType = 'video/webm; codecs=vp9';
+        } else if (MediaRecorder.isTypeSupported('video/webm; codecs=vp8')) {
+          mimeType = 'video/webm; codecs=vp8';
+        } else if (MediaRecorder.isTypeSupported('video/webm')) {
+          mimeType = 'video/webm';
+        }
       }
 
       try {
@@ -587,7 +592,58 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
 
     setupCanvas();
 
-    const spawnParticles = (pos: {x:number, y:number}, color: string) => {
+    const getCanvasColor = (colorValue: ColorValue, alpha: number = 1) => {
+      if (!ctx) return '#fff';
+      if (colorValue.type === 'solid') {
+        if (alpha < 1) {
+          const rgb = hexToRgb(colorValue.color);
+          return `rgba(${rgb}, ${alpha})`;
+        }
+        return colorValue.color;
+      } else {
+        const grad = ctx.createLinearGradient(padding, 0, width - padding, 0);
+        colorValue.stops.forEach(stop => {
+          if (alpha < 1) {
+            const rgb = hexToRgb(stop.color);
+            grad.addColorStop(stop.offset, `rgba(${rgb}, ${alpha})`);
+          } else {
+            grad.addColorStop(stop.offset, stop.color);
+          }
+        });
+        return grad;
+      }
+    };
+
+    const getParticleColor = (colorValue: ColorValue, x: number) => {
+      if (colorValue.type === 'solid') return colorValue.color;
+      
+      // Interpolate gradient for particle based on its x position
+      const t = Math.max(0, Math.min(1, (x - padding) / (width - padding * 2)));
+      const stops = [...colorValue.stops].sort((a, b) => a.offset - b.offset);
+      
+      if (t <= stops[0].offset) return stops[0].color;
+      if (t >= stops[stops.length - 1].offset) return stops[stops.length - 1].color;
+      
+      for (let i = 0; i < stops.length - 1; i++) {
+        if (t >= stops[i].offset && t <= stops[i+1].offset) {
+          const s1 = stops[i];
+          const s2 = stops[i+1];
+          const factor = (t - s1.offset) / (s2.offset - s1.offset);
+          
+          const rgb1 = hexToRgb(s1.color).split(',').map(Number);
+          const rgb2 = hexToRgb(s2.color).split(',').map(Number);
+          
+          const r = Math.round(rgb1[0] + factor * (rgb2[0] - rgb1[0]));
+          const g = Math.round(rgb1[1] + factor * (rgb2[1] - rgb1[1]));
+          const b = Math.round(rgb1[2] + factor * (rgb2[2] - rgb1[2]));
+          
+          return `rgb(${r}, ${g}, ${b})`;
+        }
+      }
+      return '#fff';
+    };
+
+    const spawnParticles = (pos: {x:number, y:number}, colorValue: ColorValue) => {
       const state = stateRef.current;
       if (Math.random() < particleEmissionRate) {
         state.particles.push({
@@ -596,7 +652,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
           vx: (Math.random() - 0.5) * 1.5,
           vy: (Math.random() - 0.5) * 1.5,
           life: 1,
-          color: color
+          color: getParticleColor(colorValue, pos.x)
         });
       }
     };
@@ -681,17 +737,17 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       }
     };
 
-    const drawOutline = (pts: {x:number, y:number}[], color: string) => {
+    const drawOutline = (pts: {x:number, y:number}[], colorValue: ColorValue) => {
       if (!ctx || pts.length === 0) return;
       ctx.beginPath();
       ctx.moveTo(pts[0].x, pts[0].y);
       for (let i = 1; i < pts.length; i++) {
         ctx.lineTo(pts[i].x, pts[i].y);
       }
-      ctx.lineCap = 'round';
+      ctx.lineCap = outlineCap;
       ctx.lineJoin = 'round';
       ctx.lineWidth = outlineWidth;
-      ctx.strokeStyle = color;
+      ctx.strokeStyle = getCanvasColor(colorValue);
       if (outlineStyle === 'dotted') {
         ctx.setLineDash([outlineDashLength, outlineDashLength]);
       } else {
@@ -701,7 +757,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       ctx.setLineDash([]);
     };
 
-    const drawLine = (pts: {x:number, y:number}[], lengths: number[], totalLength: number, progress: number, color: string) => {
+    const drawLine = (pts: {x:number, y:number}[], lengths: number[], totalLength: number, progress: number, colorValue: ColorValue) => {
       if (!ctx || progress <= 0 || pts.length === 0) return null;
       const targetLen = totalLength * progress;
       let endIdx = 1;
@@ -729,7 +785,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
         ctx.lineTo(currentPos.x, currentPos.y);
       }
 
-      ctx.lineCap = 'round';
+      ctx.lineCap = lineCap;
       ctx.lineJoin = 'round';
       
       if (lineStyle === 'dotted') {
@@ -741,7 +797,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       // Glow effect using filter for perfect smooth gradients
       ctx.save();
       ctx.filter = `blur(${lineWidth * 4}px)`;
-      ctx.strokeStyle = color;
+      ctx.strokeStyle = getCanvasColor(colorValue);
       ctx.lineWidth = lineWidth * 4;
       ctx.stroke();
       
@@ -763,7 +819,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
         ctx.filter = `blur(${pointRadius * 1.5}px)`;
         ctx.beginPath();
         drawShape(ctx, currentPos.x, currentPos.y, pointRadius * 2, headShape);
-        ctx.fillStyle = color;
+        ctx.fillStyle = getCanvasColor(colorValue);
         ctx.fill();
         ctx.restore();
 
@@ -791,14 +847,21 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       ctx.closePath();
 
       const grad = ctx.createLinearGradient(0, padding, 0, height - padding);
-      grad.addColorStop(0, `rgba(${hexToRgb(line2Color)}, ${0.4 * fillProgress})`);
-      grad.addColorStop(1, `rgba(${hexToRgb(line1Color)}, ${0.4 * fillProgress})`);
+      
+      const getSingleColor = (cv: ColorValue) => {
+        if (cv.type === 'solid') return cv.color;
+        if (cv.stops.length > 0) return cv.stops[0].color;
+        return '#fff';
+      };
+
+      grad.addColorStop(0, `rgba(${hexToRgb(getSingleColor(line2Color))}, ${0.4 * fillProgress})`);
+      grad.addColorStop(1, `rgba(${hexToRgb(getSingleColor(line1Color))}, ${0.4 * fillProgress})`);
 
       ctx.fillStyle = grad;
       ctx.fill();
     };
 
-    const drawEditorPoints = (pts: {x:number, y:number}[], color: string, type: 'target' | 'baseline') => {
+    const drawEditorPoints = (pts: {x:number, y:number}[], colorValue: ColorValue, type: 'target' | 'baseline') => {
       if (!ctx) return;
       pts.forEach((p, i) => {
         const cx = padding + p.x * (width - padding * 2);
@@ -806,7 +869,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
         
         ctx.beginPath();
         ctx.arc(cx, cy, 6, 0, Math.PI * 2);
-        ctx.fillStyle = color;
+        ctx.fillStyle = getParticleColor(colorValue, cx);
         ctx.fill();
         ctx.lineWidth = 2;
         ctx.strokeStyle = '#fff';

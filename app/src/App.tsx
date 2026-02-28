@@ -1,6 +1,15 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Play, Pause, Square, RotateCcw, Download, Video, Film, Grid, Settings2, Image as ImageIcon, Trash2, Upload, RefreshCw, Save, Activity, Monitor, Edit3, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Clock, Eye, EyeOff, FolderOpen } from 'lucide-react';
+import { Play, Pause, Square, RotateCcw, Download, Video, Film, Grid, Settings2, Image as ImageIcon, Trash2, Upload, RefreshCw, Save, Activity, Monitor, Edit3, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Clock, Eye, EyeOff, FolderOpen, Lightbulb, Maximize, Sparkles, Database } from 'lucide-react';
 import AnimationCanvas, { AnimationCanvasRef } from './components/AnimationCanvas';
+import ColorPicker from './components/ColorPicker';
+import { ColorValue } from './types';
+
+function parseColorValue(val: any): ColorValue {
+  if (typeof val === 'string') {
+    return { type: 'solid', color: val };
+  }
+  return val as ColorValue;
+}
 
 function DraggableInput({ value, onChange, step = 1, min = -Infinity, max = Infinity, className, disabled }: any) {
   const [isHoveringArrows, setIsHoveringArrows] = useState(false);
@@ -80,7 +89,7 @@ function DraggableInput({ value, onChange, step = 1, min = -Infinity, max = Infi
 
 const DEFAULT_SETTINGS = {
   duration: 10,
-  revealDuration: 1.5,
+  revealDuration: 2,
   mode: 'together' as const,
   resolution: { w: 1920, h: 1080 },
   bgColor: '#05050a',
@@ -93,17 +102,19 @@ const DEFAULT_SETTINGS = {
   outlineWidth: 4,
   outlineStyle: 'solid' as 'solid' | 'dotted',
   outlineDashLength: 10,
-  outline1Color: '#cc4b00',
-  outline2Color: '#00a8cc',
+  outline1Color: { type: 'solid', color: '#cc4b00' } as ColorValue,
+  outline2Color: { type: 'solid', color: '#00a8cc' } as ColorValue,
   pointRadius: 4,
   headShape: 'circle' as 'circle' | 'triangle' | 'star' | 'diamond' | 'hex',
   easing: 'easeInOutCubic',
   customBezier: { x1: 0.25, y1: 0.1, x2: 0.25, y2: 1.0 },
-  line1Color: '#ff5e00', // Target
-  line2Color: '#00d2ff', // Baseline
+  line1Color: { type: 'solid', color: '#ff5e00' } as ColorValue, // Target
+  line2Color: { type: 'solid', color: '#00d2ff' } as ColorValue, // Baseline
+  lineCap: 'round' as 'round' | 'butt' | 'square',
+  outlineCap: 'round' as 'round' | 'butt' | 'square',
   particleSize: 2,
-  particleColor1: '#ff5e00',
-  particleColor2: '#00d2ff',
+  particleColor1: { type: 'solid', color: '#ff5e00' } as ColorValue,
+  particleColor2: { type: 'solid', color: '#00d2ff' } as ColorValue,
   particleShape: 'circle' as 'circle' | 'triangle' | 'star' | 'diamond' | 'hex',
   particleEmissionRate: 0.5,
   targetPoints: [
@@ -149,17 +160,19 @@ export default function App() {
   const [outlineWidth, setOutlineWidth] = useState(DEFAULT_SETTINGS.outlineWidth);
   const [outlineStyle, setOutlineStyle] = useState(DEFAULT_SETTINGS.outlineStyle);
   const [outlineDashLength, setOutlineDashLength] = useState(DEFAULT_SETTINGS.outlineDashLength);
-  const [outline1Color, setOutline1Color] = useState(DEFAULT_SETTINGS.outline1Color);
-  const [outline2Color, setOutline2Color] = useState(DEFAULT_SETTINGS.outline2Color);
+  const [outline1Color, setOutline1Color] = useState<ColorValue>(DEFAULT_SETTINGS.outline1Color);
+  const [outline2Color, setOutline2Color] = useState<ColorValue>(DEFAULT_SETTINGS.outline2Color);
   const [pointRadius, setPointRadius] = useState(DEFAULT_SETTINGS.pointRadius);
   const [headShape, setHeadShape] = useState(DEFAULT_SETTINGS.headShape);
   const [easing, setEasing] = useState(DEFAULT_SETTINGS.easing);
   const [customBezier, setCustomBezier] = useState(DEFAULT_SETTINGS.customBezier);
-  const [line1Color, setLine1Color] = useState(DEFAULT_SETTINGS.line1Color);
-  const [line2Color, setLine2Color] = useState(DEFAULT_SETTINGS.line2Color);
+  const [line1Color, setLine1Color] = useState<ColorValue>(DEFAULT_SETTINGS.line1Color);
+  const [line2Color, setLine2Color] = useState<ColorValue>(DEFAULT_SETTINGS.line2Color);
+  const [lineCap, setLineCap] = useState(DEFAULT_SETTINGS.lineCap);
+  const [outlineCap, setOutlineCap] = useState(DEFAULT_SETTINGS.outlineCap);
   const [particleSize, setParticleSize] = useState(DEFAULT_SETTINGS.particleSize);
-  const [particleColor1, setParticleColor1] = useState(DEFAULT_SETTINGS.particleColor1);
-  const [particleColor2, setParticleColor2] = useState(DEFAULT_SETTINGS.particleColor2);
+  const [particleColor1, setParticleColor1] = useState<ColorValue>(DEFAULT_SETTINGS.particleColor1);
+  const [particleColor2, setParticleColor2] = useState<ColorValue>(DEFAULT_SETTINGS.particleColor2);
   const [particleShape, setParticleShape] = useState(DEFAULT_SETTINGS.particleShape);
   const [particleEmissionRate, setParticleEmissionRate] = useState(DEFAULT_SETTINGS.particleEmissionRate);
   const [targetPoints, setTargetPoints] = useState(DEFAULT_SETTINGS.targetPoints);
@@ -290,7 +303,7 @@ export default function App() {
 
   const getCurrentSettings = () => ({
     duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, lineStyle, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier,
-    line1Color, line2Color, particleSize, particleColor1, particleColor2, particleShape,
+    line1Color, line2Color, lineCap, outlineCap, particleSize, particleColor1, particleColor2, particleShape,
     particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline
   });
 
@@ -328,17 +341,19 @@ export default function App() {
     if (s.outlineWidth !== undefined) setOutlineWidth(s.outlineWidth);
     if (s.outlineStyle !== undefined) setOutlineStyle(s.outlineStyle);
     if (s.outlineDashLength !== undefined) setOutlineDashLength(s.outlineDashLength);
-    if (s.outline1Color !== undefined) setOutline1Color(s.outline1Color);
-    if (s.outline2Color !== undefined) setOutline2Color(s.outline2Color);
+    if (s.outline1Color !== undefined) setOutline1Color(parseColorValue(s.outline1Color));
+    if (s.outline2Color !== undefined) setOutline2Color(parseColorValue(s.outline2Color));
     if (s.pointRadius !== undefined) setPointRadius(s.pointRadius);
     if (s.headShape !== undefined) setHeadShape(s.headShape);
     if (s.easing !== undefined) setEasing(s.easing);
     if (s.customBezier !== undefined) setCustomBezier(s.customBezier);
-    if (s.line1Color !== undefined) setLine1Color(s.line1Color);
-    if (s.line2Color !== undefined) setLine2Color(s.line2Color);
+    if (s.line1Color !== undefined) setLine1Color(parseColorValue(s.line1Color));
+    if (s.line2Color !== undefined) setLine2Color(parseColorValue(s.line2Color));
+    if (s.lineCap !== undefined) setLineCap(s.lineCap);
+    if (s.outlineCap !== undefined) setOutlineCap(s.outlineCap);
     if (s.particleSize !== undefined) setParticleSize(s.particleSize);
-    if (s.particleColor1 !== undefined) setParticleColor1(s.particleColor1);
-    if (s.particleColor2 !== undefined) setParticleColor2(s.particleColor2);
+    if (s.particleColor1 !== undefined) setParticleColor1(parseColorValue(s.particleColor1));
+    if (s.particleColor2 !== undefined) setParticleColor2(parseColorValue(s.particleColor2));
     if (s.particleShape !== undefined) setParticleShape(s.particleShape);
     if (s.particleEmissionRate !== undefined) setParticleEmissionRate(s.particleEmissionRate);
     if (s.targetPoints !== undefined) setTargetPoints(JSON.parse(JSON.stringify(s.targetPoints)));
@@ -440,6 +455,8 @@ export default function App() {
   };
 
   const [exportFormat, setExportFormat] = useState<'webm' | 'mp4'>('webm');
+  const [webmCodec, setWebmCodec] = useState<'vp8' | 'vp9'>('vp8');
+  const [framerate, setFramerate] = useState(24);
 
   const handleRecordToggle = () => {
     if (isRecording) {
@@ -448,7 +465,8 @@ export default function App() {
     } else {
       if (isEditorMode) setIsEditorMode(false);
       setIsRecording(true);
-      canvasRef.current?.startRecording(exportFormat, () => setIsRecording(false));
+      const isTransparent = exportFormat === 'webm';
+      canvasRef.current?.startRecording(exportFormat, framerate, webmCodec, isTransparent, () => setIsRecording(false));
     }
   };
 
@@ -493,11 +511,11 @@ export default function App() {
         if (s.showBloom !== undefined) setShowBloom(s.showBloom);
         if (s.lineWidth !== undefined) setLineWidth(s.lineWidth);
         if (s.pointRadius !== undefined) setPointRadius(s.pointRadius);
-        if (s.line1Color !== undefined) setLine1Color(s.line1Color);
-        if (s.line2Color !== undefined) setLine2Color(s.line2Color);
+        if (s.line1Color !== undefined) setLine1Color(parseColorValue(s.line1Color));
+        if (s.line2Color !== undefined) setLine2Color(parseColorValue(s.line2Color));
         if (s.particleSize !== undefined) setParticleSize(s.particleSize);
-        if (s.particleColor1 !== undefined) setParticleColor1(s.particleColor1);
-        if (s.particleColor2 !== undefined) setParticleColor2(s.particleColor2);
+        if (s.particleColor1 !== undefined) setParticleColor1(parseColorValue(s.particleColor1));
+        if (s.particleColor2 !== undefined) setParticleColor2(parseColorValue(s.particleColor2));
         if (s.particleEmissionRate !== undefined) setParticleEmissionRate(s.particleEmissionRate);
         if (s.targetPoints !== undefined) setTargetPoints(s.targetPoints);
         if (s.baselinePoints !== undefined) setBaselinePoints(s.baselinePoints);
@@ -532,6 +550,8 @@ export default function App() {
     setCustomBezier(DEFAULT_SETTINGS.customBezier);
     setLine1Color(DEFAULT_SETTINGS.line1Color);
     setLine2Color(DEFAULT_SETTINGS.line2Color);
+    setLineCap(DEFAULT_SETTINGS.lineCap);
+    setOutlineCap(DEFAULT_SETTINGS.outlineCap);
     setParticleSize(DEFAULT_SETTINGS.particleSize);
     setParticleColor1(DEFAULT_SETTINGS.particleColor1);
     setParticleColor2(DEFAULT_SETTINGS.particleColor2);
@@ -634,6 +654,29 @@ export default function App() {
             >
               <option value="webm">WebM</option>
               <option value="mp4">MP4</option>
+            </select>
+            {exportFormat === 'webm' && (
+              <>
+                <select 
+                  value={webmCodec} 
+                  onChange={e => setWebmCodec(e.target.value as 'vp8' | 'vp9')}
+                  disabled={isRecording}
+                  className="bg-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none disabled:opacity-50"
+                >
+                  <option value="vp8">VP8</option>
+                  <option value="vp9">VP9</option>
+                </select>
+              </>
+            )}
+            <select 
+              value={framerate} 
+              onChange={e => setFramerate(Number(e.target.value))}
+              disabled={isRecording}
+              className="bg-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none disabled:opacity-50"
+            >
+              <option value="24">24 fps</option>
+              <option value="30">30 fps</option>
+              <option value="60">60 fps</option>
             </select>
           </div>
         </div>
@@ -758,9 +801,9 @@ export default function App() {
 
           <div className="h-px bg-white/5"></div>
 
-          {/* Background */}
+          {/* Lighting & Glows */}
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-white flex items-center gap-2"><ImageIcon className="w-4 h-4"/> Background</h3>
+            <h3 className="text-sm font-medium text-white flex items-center gap-2"><Lightbulb className="w-4 h-4"/> Lighting & Glows</h3>
             
             <div className="flex items-center justify-between">
               <span className="text-sm text-zinc-400">Color</span>
@@ -796,21 +839,11 @@ export default function App() {
 
           {/* Lines */}
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-white flex items-center gap-2">Lines</h3>
+            <h3 className="text-sm font-medium text-white flex items-center gap-2"><Activity className="w-4 h-4"/> Lines</h3>
             
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <div className="relative w-6 h-6 rounded overflow-hidden border border-white/20">
-                  <input type="color" value={line2Color} onChange={e => {setLine2Color(e.target.value); setParticleColor2(e.target.value);}} className="absolute -inset-2 w-10 h-10 cursor-pointer" />
-                </div>
-                <span className="text-xs text-zinc-400">Baseline</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="relative w-6 h-6 rounded overflow-hidden border border-white/20">
-                  <input type="color" value={line1Color} onChange={e => {setLine1Color(e.target.value); setParticleColor1(e.target.value);}} className="absolute -inset-2 w-10 h-10 cursor-pointer" />
-                </div>
-                <span className="text-xs text-zinc-400">Target</span>
-              </div>
+              <ColorPicker value={line2Color} onChange={v => {setLine2Color(v); setParticleColor2(v);}} label="Baseline" />
+              <ColorPicker value={line1Color} onChange={v => {setLine1Color(v); setParticleColor1(v);}} label="Target" align="right" />
             </div>
 
             <div className="space-y-2">
@@ -822,6 +855,18 @@ export default function App() {
               >
                 <option value="solid">Solid</option>
                 <option value="dotted">Dotted</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <span className="text-xs text-zinc-400 block">Cap Style</span>
+              <select 
+                value={lineCap} 
+                onChange={e => setLineCap(e.target.value as any)}
+                className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
+              >
+                <option value="round">Round</option>
+                <option value="butt">Flat</option>
+                <option value="square">Square</option>
               </select>
             </div>
             {lineStyle === 'dotted' && (
@@ -862,7 +907,7 @@ export default function App() {
           {/* Outlines */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-white flex items-center gap-2">Outlines</h3>
+              <h3 className="text-sm font-medium text-white flex items-center gap-2"><Maximize className="w-4 h-4"/> Outlines</h3>
               <label className="flex items-center cursor-pointer">
                 <input type="checkbox" checked={showOutline} onChange={e => setShowOutline(e.target.checked)} className="rounded bg-zinc-800 border-zinc-700 text-orange-500 focus:ring-orange-500 focus:ring-offset-zinc-900" />
               </label>
@@ -871,18 +916,8 @@ export default function App() {
             {showOutline && (
               <>
                 <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className="relative w-6 h-6 rounded overflow-hidden border border-white/20">
-                      <input type="color" value={outline2Color} onChange={e => setOutline2Color(e.target.value)} className="absolute -inset-2 w-10 h-10 cursor-pointer" />
-                    </div>
-                    <span className="text-xs text-zinc-400">Baseline</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="relative w-6 h-6 rounded overflow-hidden border border-white/20">
-                      <input type="color" value={outline1Color} onChange={e => setOutline1Color(e.target.value)} className="absolute -inset-2 w-10 h-10 cursor-pointer" />
-                    </div>
-                    <span className="text-xs text-zinc-400">Target</span>
-                  </div>
+                  <ColorPicker value={outline2Color} onChange={setOutline2Color} label="Baseline" />
+                  <ColorPicker value={outline1Color} onChange={setOutline1Color} label="Target" align="right" />
                 </div>
 
                 <div className="space-y-2">
@@ -894,6 +929,18 @@ export default function App() {
                   >
                     <option value="solid">Solid</option>
                     <option value="dotted">Dotted</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <span className="text-xs text-zinc-400 block">Cap Style</span>
+                  <select 
+                    value={outlineCap} 
+                    onChange={e => setOutlineCap(e.target.value as any)}
+                    className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
+                  >
+                    <option value="round">Round</option>
+                    <option value="butt">Flat</option>
+                    <option value="square">Square</option>
                   </select>
                 </div>
                 {outlineStyle === 'dotted' && (
@@ -915,7 +962,7 @@ export default function App() {
 
           {/* Particles */}
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-white flex items-center gap-2">Particles</h3>
+            <h3 className="text-sm font-medium text-white flex items-center gap-2"><Sparkles className="w-4 h-4"/> Particles</h3>
             <div className="space-y-2">
               <span className="text-xs text-zinc-400 block">Shape</span>
               <select 
@@ -931,18 +978,8 @@ export default function App() {
               </select>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <div className="relative w-6 h-6 rounded overflow-hidden border border-white/20">
-                  <input type="color" value={particleColor2} onChange={e => setParticleColor2(e.target.value)} className="absolute -inset-2 w-10 h-10 cursor-pointer" />
-                </div>
-                <span className="text-xs text-zinc-400">Baseline</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="relative w-6 h-6 rounded overflow-hidden border border-white/20">
-                  <input type="color" value={particleColor1} onChange={e => setParticleColor1(e.target.value)} className="absolute -inset-2 w-10 h-10 cursor-pointer" />
-                </div>
-                <span className="text-xs text-zinc-400">Target</span>
-              </div>
+              <ColorPicker value={particleColor2} onChange={setParticleColor2} label="Baseline" />
+              <ColorPicker value={particleColor1} onChange={setParticleColor1} label="Target" align="right" />
             </div>
             <div className="space-y-2">
               <div className="flex justify-between text-xs text-zinc-400"><span>Size</span><span>{particleSize}px</span></div>
@@ -1052,6 +1089,8 @@ export default function App() {
               customBezier={customBezier}
               line1Color={line1Color}
               line2Color={line2Color}
+              lineCap={lineCap}
+              outlineCap={outlineCap}
               particleSize={particleSize}
               particleColor1={particleColor1}
               particleColor2={particleColor2}
@@ -1090,7 +1129,7 @@ export default function App() {
         {/* Right Sidebar - Data Points */}
         <aside className={`w-[420px] shrink-0 border-l border-white/10 bg-zinc-900/30 overflow-hidden flex flex-col transition-all duration-300 ${showRightSidebar ? 'mr-0' : '-mr-[420px]'}`}>
           <div className="p-4 border-b border-white/5 shrink-0">
-            <h3 className="text-sm font-medium text-white">Data Points</h3>
+            <h3 className="text-sm font-medium text-white flex items-center gap-2"><Database className="w-4 h-4"/> Data Points</h3>
             <p className="text-xs text-zinc-500 mt-1">Values from 0.0 to 1.0</p>
           </div>
           <div className="flex-1 flex overflow-hidden">
@@ -1162,7 +1201,8 @@ function ExportButton({ icon, label, onClick, disabled }: { icon: React.ReactNod
   );
 }
 
-function DataPointEditor({ title, points, onChange, color, visible, onToggleVisibility }: { title: string, points: {x: number, y: number}[], onChange: (pts: {x: number, y: number}[]) => void, color: string, visible: boolean, onToggleVisibility: () => void }) {
+function DataPointEditor({ title, points, onChange, color, visible, onToggleVisibility }: { title: string, points: {x: number, y: number}[], onChange: (pts: {x: number, y: number}[]) => void, color: ColorValue, visible: boolean, onToggleVisibility: () => void }) {
+  const displayColor = color.type === 'solid' ? color.color : (color.stops[0]?.color || '#ffffff');
   return (
     <div className={`space-y-3 flex flex-col h-full ${!visible ? 'opacity-50' : ''}`}>
       <div className="flex justify-between items-center text-sm">
@@ -1170,7 +1210,7 @@ function DataPointEditor({ title, points, onChange, color, visible, onToggleVisi
           <button onClick={onToggleVisibility} className="text-zinc-400 hover:text-white transition-colors" title={visible ? "Hide" : "Show"}>
             {visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
           </button>
-          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }}></div>
+          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: displayColor }}></div>
           <span className="font-medium text-white">{title}</span>
         </div>
         <button 
@@ -1179,7 +1219,7 @@ function DataPointEditor({ title, points, onChange, color, visible, onToggleVisi
             onChange([...points, {x: Math.min(1, last.x + 0.1), y: last.y}]);
           }} 
           className="text-xs hover:text-white transition-colors"
-          style={{ color }}
+          style={{ color: displayColor }}
           disabled={!visible}
         >
           + Add
