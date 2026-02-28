@@ -83,6 +83,70 @@ export default function App() {
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
   const mainLayoutRef = useRef<HTMLDivElement>(null);
 
+  // History for Undo/Redo
+  const historyRef = useRef<{target: {x:number, y:number}[], baseline: {x:number, y:number}[]}[]>([]);
+  const historyIndexRef = useRef(-1);
+  const commitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (isEditorMode) {
+      if (historyRef.current.length === 0) {
+        historyRef.current = [{ target: JSON.parse(JSON.stringify(targetPoints)), baseline: JSON.parse(JSON.stringify(baselinePoints)) }];
+        historyIndexRef.current = 0;
+      }
+    } else {
+      historyRef.current = [];
+      historyIndexRef.current = -1;
+    }
+  }, [isEditorMode]);
+
+  useEffect(() => {
+    if (!isEditorMode) return;
+    if (commitTimeoutRef.current) clearTimeout(commitTimeoutRef.current);
+    commitTimeoutRef.current = setTimeout(() => {
+      const newEntry = { target: JSON.parse(JSON.stringify(targetPoints)), baseline: JSON.parse(JSON.stringify(baselinePoints)) };
+      if (historyIndexRef.current >= 0) {
+        const current = historyRef.current[historyIndexRef.current];
+        if (JSON.stringify(current) === JSON.stringify(newEntry)) return;
+      }
+      const newHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
+      newHistory.push(newEntry);
+      if (newHistory.length > 50) newHistory.shift();
+      else historyIndexRef.current++;
+      historyRef.current = newHistory;
+    }, 200);
+  }, [targetPoints, baselinePoints, isEditorMode]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isEditorMode) return;
+      
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'z') {
+          e.preventDefault();
+          if (historyIndexRef.current > 0) {
+            historyIndexRef.current--;
+            const state = historyRef.current[historyIndexRef.current];
+            setTargetPoints(JSON.parse(JSON.stringify(state.target)));
+            setBaselinePoints(JSON.parse(JSON.stringify(state.baseline)));
+          }
+        } else if (e.key === 'y' || (e.key === 'Z' && e.shiftKey)) {
+          e.preventDefault();
+          if (historyIndexRef.current < historyRef.current.length - 1) {
+            historyIndexRef.current++;
+            const state = historyRef.current[historyIndexRef.current];
+            setTargetPoints(JSON.parse(JSON.stringify(state.target)));
+            setBaselinePoints(JSON.parse(JSON.stringify(state.baseline)));
+          }
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditorMode]);
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (isScrolling) {
@@ -174,8 +238,8 @@ export default function App() {
     if (s.particleColor2 !== undefined) setParticleColor2(s.particleColor2);
     if (s.particleShape !== undefined) setParticleShape(s.particleShape);
     if (s.particleEmissionRate !== undefined) setParticleEmissionRate(s.particleEmissionRate);
-    if (s.targetPoints !== undefined) setTargetPoints(s.targetPoints);
-    if (s.baselinePoints !== undefined) setBaselinePoints(s.baselinePoints);
+    if (s.targetPoints !== undefined) setTargetPoints(JSON.parse(JSON.stringify(s.targetPoints)));
+    if (s.baselinePoints !== undefined) setBaselinePoints(JSON.parse(JSON.stringify(s.baselinePoints)));
     if (s.showTarget !== undefined) setShowTarget(s.showTarget);
     if (s.showBaseline !== undefined) setShowBaseline(s.showBaseline);
   };
@@ -463,7 +527,7 @@ export default function App() {
         {/* Left Sidebar Toggle */}
         <button 
           onClick={() => setShowLeftSidebar(!showLeftSidebar)}
-          className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1.5 rounded-r-md border border-l-0 border-white/10 shadow-lg transition-all duration-300 ${mouseNearLeft && !isScrolling ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+          className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1.5 rounded-r-md border border-l-0 border-white/10 shadow-lg transition-all duration-300 ${(!showLeftSidebar || (mouseNearLeft && !isScrolling)) ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         >
           {showLeftSidebar ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
         </button>
@@ -735,7 +799,7 @@ export default function App() {
         {/* Right Sidebar Toggle */}
         <button 
           onClick={() => setShowRightSidebar(!showRightSidebar)}
-          className={`absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1.5 rounded-l-md border border-r-0 border-white/10 shadow-lg transition-all duration-300 ${mouseNearRight && !isScrolling ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+          className={`absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1.5 rounded-l-md border border-r-0 border-white/10 shadow-lg transition-all duration-300 ${(!showRightSidebar || (mouseNearRight && !isScrolling)) ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         >
           {showRightSidebar ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
         </button>
@@ -848,7 +912,7 @@ function DataPointEditor({ title, points, onChange, color, visible, onToggleVisi
                   type="number" 
                   step="0.01" 
                   value={isNaN(p.x) ? '' : p.x} 
-                  onChange={e => { const n = [...points]; n[i].x = parseFloat(e.target.value); onChange(n); }} 
+                  onChange={e => { const n = [...points]; n[i] = { ...n[i], x: parseFloat(e.target.value) }; onChange(n); }} 
                   className="w-full bg-zinc-900 rounded px-1.5 py-0.5 text-xs text-zinc-200 border border-transparent focus:border-white/20 outline-none font-mono disabled:opacity-50" 
                   disabled={!visible}
                 />
@@ -859,7 +923,7 @@ function DataPointEditor({ title, points, onChange, color, visible, onToggleVisi
                   type="number" 
                   step="0.01" 
                   value={isNaN(p.y) ? '' : p.y} 
-                  onChange={e => { const n = [...points]; n[i].y = parseFloat(e.target.value); onChange(n); }} 
+                  onChange={e => { const n = [...points]; n[i] = { ...n[i], y: parseFloat(e.target.value) }; onChange(n); }} 
                   className="w-full bg-zinc-900 rounded px-1.5 py-0.5 text-xs text-zinc-200 border border-transparent focus:border-white/20 outline-none font-mono disabled:opacity-50" 
                   disabled={!visible}
                 />

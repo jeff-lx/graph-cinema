@@ -391,14 +391,93 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       }
     };
 
+    const handleContextMenu = (e: MouseEvent) => {
+      if (!latestProps.current.isEditorMode) return;
+      e.preventDefault();
+      
+      const coords = getNormCoords(e);
+      if (!coords) return;
+      
+      let hitType: 'target' | 'baseline' | null = null;
+      let hitIndex = -1;
+      let closestDist = 0.05;
+
+      const checkPoints = (pts: {x:number, y:number}[], type: 'target' | 'baseline') => {
+        pts.forEach((p, i) => {
+          const dx = p.x - coords.normX;
+          const dy = p.y - coords.normY;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          if (dist < closestDist) {
+            closestDist = dist;
+            hitType = type;
+            hitIndex = i;
+          }
+        });
+      };
+      
+      if (latestProps.current.showTarget) checkPoints(latestProps.current.targetPoints, 'target');
+      if (latestProps.current.showBaseline) checkPoints(latestProps.current.baselinePoints, 'baseline');
+
+      if (hitType && hitIndex !== -1) {
+        // Delete node
+        const pts = hitType === 'target' ? [...latestProps.current.targetPoints] : [...latestProps.current.baselinePoints];
+        pts.splice(hitIndex, 1);
+        if (hitType === 'target' && latestProps.current.onTargetPointsChange) latestProps.current.onTargetPointsChange(pts);
+        else if (latestProps.current.onBaselinePointsChange) latestProps.current.onBaselinePointsChange(pts);
+        return;
+      }
+
+      // If no node clicked, check if we clicked on a line segment to insert a node
+      let insertType: 'target' | 'baseline' | null = null;
+      let insertIndex = -1;
+      let minLineDist = 0.05;
+      let insertPoint = { x: 0, y: 0 };
+
+      const checkLineSegments = (pts: {x:number, y:number}[], type: 'target' | 'baseline') => {
+        for (let i = 0; i < pts.length - 1; i++) {
+          const p1 = pts[i];
+          const p2 = pts[i+1];
+
+          const l2 = Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2);
+          if (l2 === 0) continue;
+          
+          let t = ((coords.normX - p1.x) * (p2.x - p1.x) + (coords.normY - p1.y) * (p2.y - p1.y)) / l2;
+          t = Math.max(0, Math.min(1, t));
+          
+          const projX = p1.x + t * (p2.x - p1.x);
+          const projY = p1.y + t * (p2.y - p1.y);
+          
+          const dist = Math.hypot(projX - coords.normX, projY - coords.normY);
+          if (dist < minLineDist) {
+            minLineDist = dist;
+            insertType = type;
+            insertIndex = i + 1;
+            insertPoint = { x: projX, y: projY };
+          }
+        }
+      };
+
+      if (latestProps.current.showTarget) checkLineSegments(latestProps.current.targetPoints, 'target');
+      if (latestProps.current.showBaseline) checkLineSegments(latestProps.current.baselinePoints, 'baseline');
+
+      if (insertType && insertIndex !== -1) {
+        const pts = insertType === 'target' ? [...latestProps.current.targetPoints] : [...latestProps.current.baselinePoints];
+        pts.splice(insertIndex, 0, insertPoint);
+        if (insertType === 'target' && latestProps.current.onTargetPointsChange) latestProps.current.onTargetPointsChange(pts);
+        else if (latestProps.current.onBaselinePointsChange) latestProps.current.onBaselinePointsChange(pts);
+      }
+    };
+
     canvas.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
+    canvas.addEventListener('contextmenu', handleContextMenu);
 
     return () => {
       canvas.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      canvas.removeEventListener('contextmenu', handleContextMenu);
     };
   }, []);
 
