@@ -24,6 +24,7 @@ interface Props {
   particleEmissionRate: number;
   targetPoints: {x: number, y: number}[];
   baselinePoints: {x: number, y: number}[];
+  targetResolution: { w: number, h: number };
   onPlayStateChange: (isPlaying: boolean) => void;
 }
 
@@ -79,7 +80,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
   duration, mode, backgroundColor, showGrid, showBloom, backgroundImage,
   lineWidth, pointRadius, line1Color, line2Color,
   particleSize, particleColor1, particleColor2, particleEmissionRate,
-  targetPoints, baselinePoints,
+  targetPoints, baselinePoints, targetResolution,
   onPlayStateChange 
 }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -167,7 +168,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `cinematic-graph.${actualMimeType.includes('mp4') ? 'mp4' : 'webm'}`;
+          a.download = `graph-cinema.${actualMimeType.includes('mp4') ? 'mp4' : 'webm'}`;
           a.click();
           URL.revokeObjectURL(url);
           
@@ -202,23 +203,21 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
     
     let animationFrameId: number;
     let ctx: CanvasRenderingContext2D | null = null;
-    let width = 0;
-    let height = 0;
+    let width = targetResolution.w;
+    let height = targetResolution.h;
     let bluePts: {x:number, y:number}[] = [];
     let orangePts: {x:number, y:number}[] = [];
     let blueData: {lengths: number[], total: number} = { lengths: [], total: 0 };
     let orangeData: {lengths: number[], total: number} = { lengths: [], total: 0 };
-    const padding = 80;
+    let padding = Math.max(40, Math.min(width, height) * 0.08);
 
     const setupCanvas = () => {
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      width = rect.width;
-      height = rect.height;
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
+      width = targetResolution.w;
+      height = targetResolution.h;
+      canvas.width = width;
+      canvas.height = height;
       ctx = canvas.getContext('2d', { alpha: true });
-      if (ctx) ctx.scale(dpr, dpr);
+      padding = Math.max(40, Math.min(width, height) * 0.08);
 
       const mapPoints = (pts: {x:number, y:number}[]) => {
         const w = width - padding * 2;
@@ -236,11 +235,6 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
     };
 
     setupCanvas();
-
-    const resizeObserver = new ResizeObserver(() => {
-      setupCanvas();
-    });
-    resizeObserver.observe(canvas);
 
     const spawnParticles = (pos: {x:number, y:number}, color: string) => {
       const state = stateRef.current;
@@ -486,20 +480,18 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
 
     return () => {
       cancelAnimationFrame(animationFrameId);
-      resizeObserver.disconnect();
     };
   }, [
     duration, mode, backgroundColor, showGrid, showBloom, backgroundImage,
     lineWidth, pointRadius, line1Color, line2Color,
     particleSize, particleColor1, particleColor2, particleEmissionRate,
-    targetPoints, baselinePoints
+    targetPoints, baselinePoints, targetResolution.w, targetResolution.h
   ]);
 
   return (
     <canvas
       ref={canvasRef}
-      className="w-full h-full block"
-      style={{ width: '100%', height: '100%' }}
+      className="block object-contain w-full h-full"
     />
   );
 });
