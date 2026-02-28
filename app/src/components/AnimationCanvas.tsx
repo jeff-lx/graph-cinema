@@ -6,11 +6,13 @@ export interface AnimationCanvasRef {
   stop: () => void;
   restart: () => void;
   seek: (time: number) => void;
-  exportVideo: (format: 'webm' | 'mp4' | 'webm-transparent', onComplete: () => void) => void;
+  startRecording: (format: 'webm' | 'mp4', onComplete: () => void) => void;
+  stopRecording: () => void;
 }
 
 interface Props {
   duration: number;
+  revealDuration: number;
   mode: 'together' | 'staggered';
   backgroundColor: string;
   showGrid: boolean;
@@ -23,6 +25,7 @@ interface Props {
   particleSize: number;
   particleColor1: string;
   particleColor2: string;
+  particleShape: 'circle' | 'triangle' | 'star' | 'diamond' | 'hex';
   particleEmissionRate: number;
   targetPoints: {x: number, y: number}[];
   baselinePoints: {x: number, y: number}[];
@@ -85,9 +88,9 @@ const hexToRgb = (hex: string) => {
 };
 
 const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({ 
-  duration, mode, backgroundColor, showGrid, showBloom, backgroundImage,
+  duration, revealDuration, mode, backgroundColor, showGrid, showBloom, backgroundImage,
   lineWidth, pointRadius, line1Color, line2Color,
-  particleSize, particleColor1, particleColor2, particleEmissionRate,
+  particleSize, particleColor1, particleColor2, particleShape, particleEmissionRate,
   targetPoints, baselinePoints, showTarget, showBaseline, targetResolution,
   isEditorMode, onTargetPointsChange, onBaselinePointsChange, onTimeUpdate,
   onPlayStateChange 
@@ -157,7 +160,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
         stateRef.current.fillProgress = 0;
       } else {
         stateRef.current.progress = 1;
-        stateRef.current.fillProgress = Math.min(1, (time - duration) / 1.5);
+        stateRef.current.fillProgress = revealDuration > 0 ? Math.min(1, (time - duration) / revealDuration) : 1;
       }
       stateRef.current.particles = [];
       if (onTimeUpdate) onTimeUpdate(time);
@@ -170,12 +173,12 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       stateRef.current.lastTime = performance.now();
       onPlayStateChange(true);
     },
-    exportVideo: (format, onComplete) => {
+    startRecording: (format, onComplete) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
       stateRef.current.exportFormat = format;
-      stateRef.current.transparentBg = format === 'webm-transparent';
+      stateRef.current.transparentBg = false;
       stateRef.current.onExportComplete = onComplete;
       
       const stream = canvas.captureStream(60);
@@ -221,10 +224,13 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
 
         stateRef.current.isRecording = true;
         
-        // Reset and play
-        stateRef.current.progress = 0;
-        stateRef.current.fillProgress = 0;
-        stateRef.current.particles = [];
+        // Only reset if we are already at the end
+        if (stateRef.current.progress >= 1 && (revealDuration === 0 || stateRef.current.fillProgress >= 1)) {
+          stateRef.current.progress = 0;
+          stateRef.current.fillProgress = 0;
+          stateRef.current.particles = [];
+        }
+        
         stateRef.current.isPlaying = true;
         stateRef.current.lastTime = performance.now();
         onPlayStateChange(true);
@@ -234,6 +240,13 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
         console.error('Failed to start recording:', e);
         stateRef.current.transparentBg = false;
         if (onComplete) onComplete();
+      }
+    },
+    stopRecording: () => {
+      const state = stateRef.current;
+      if (state.isRecording && state.recorder && state.recorder.state !== 'inactive') {
+        state.recorder.stop();
+        state.isRecording = false;
       }
     }
   }));
@@ -610,8 +623,8 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
           
           if (state.progress < 1) {
             state.progress = Math.min(state.progress + dt / duration, 1);
-          } else if (state.fillProgress < 1) {
-            state.fillProgress = Math.min(state.fillProgress + dt / 1.5, 1); // 1.5s fill animation
+          } else if (state.fillProgress < 1 && revealDuration > 0) {
+            state.fillProgress = Math.min(state.fillProgress + dt / revealDuration, 1);
           } else if (state.isRecording) {
             // Finish recording
             state.isRecording = false;
@@ -622,12 +635,15 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
               }, 100);
             }
             onPlayStateChange(false);
+          } else {
+            state.isPlaying = false;
+            onPlayStateChange(false);
           }
         } else {
           state.lastTime = time;
         }
         if (onTimeUpdate) {
-          onTimeUpdate(state.progress * duration + state.fillProgress * 1.5);
+          onTimeUpdate(state.progress * duration + state.fillProgress * revealDuration);
         }
       }
 
@@ -649,7 +665,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
         }
       }
 
-      if (state.progress >= 1 && showTarget && showBaseline) {
+      if (state.progress >= 1 && showTarget && showBaseline && revealDuration > 0) {
         drawFill(easeInOutCubic(state.fillProgress));
       }
 
@@ -673,7 +689,42 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
           state.particles.splice(i, 1);
         } else if (ctx) {
           ctx.beginPath();
-          ctx.arc(p.x, p.y, particleSize * p.life, 0, Math.PI * 2);
+          if (particleShape === 'circle') {
+            ctx.arc(p.x, p.y, particleSize * p.life, 0, Math.PI * 2);
+          } else if (particleShape === 'triangle') {
+            const s = particleSize * p.life * 1.5;
+            ctx.moveTo(p.x, p.y - s);
+            ctx.lineTo(p.x + s, p.y + s);
+            ctx.lineTo(p.x - s, p.y + s);
+            ctx.closePath();
+          } else if (particleShape === 'star') {
+            const s = particleSize * p.life * 1.5;
+            for (let j = 0; j < 5; j++) {
+              const angle = (j * 4 * Math.PI) / 5 - Math.PI / 2;
+              const px = p.x + Math.cos(angle) * s;
+              const py = p.y + Math.sin(angle) * s;
+              if (j === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+          } else if (particleShape === 'diamond') {
+            const s = particleSize * p.life * 1.5;
+            ctx.moveTo(p.x, p.y - s);
+            ctx.lineTo(p.x + s, p.y);
+            ctx.lineTo(p.x, p.y + s);
+            ctx.lineTo(p.x - s, p.y);
+            ctx.closePath();
+          } else if (particleShape === 'hex') {
+            const s = particleSize * p.life * 1.5;
+            for (let j = 0; j < 6; j++) {
+              const angle = (j * Math.PI) / 3;
+              const px = p.x + Math.cos(angle) * s;
+              const py = p.y + Math.sin(angle) * s;
+              if (j === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+          }
           ctx.fillStyle = p.color;
           ctx.globalAlpha = p.life;
           ctx.fill();
@@ -703,9 +754,9 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       cancelAnimationFrame(animationFrameId);
     };
   }, [
-    duration, mode, backgroundColor, showGrid, showBloom, backgroundImage,
+    duration, revealDuration, mode, backgroundColor, showGrid, showBloom, backgroundImage,
     lineWidth, pointRadius, line1Color, line2Color,
-    particleSize, particleColor1, particleColor2, particleEmissionRate,
+    particleSize, particleColor1, particleColor2, particleShape, particleEmissionRate,
     targetPoints, baselinePoints, targetResolution.w, targetResolution.h,
     isEditorMode, showTarget, showBaseline
   ]);

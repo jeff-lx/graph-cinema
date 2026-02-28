@@ -4,6 +4,7 @@ import AnimationCanvas, { AnimationCanvasRef } from './components/AnimationCanva
 
 const DEFAULT_SETTINGS = {
   duration: 10,
+  revealDuration: 1.5,
   mode: 'together' as const,
   resolution: { w: 1920, h: 1080 },
   bgColor: '#05050a',
@@ -16,6 +17,7 @@ const DEFAULT_SETTINGS = {
   particleSize: 2,
   particleColor1: '#ff5e00',
   particleColor2: '#00d2ff',
+  particleShape: 'circle' as 'circle' | 'triangle' | 'star' | 'diamond' | 'hex',
   particleEmissionRate: 0.5,
   targetPoints: [
     {x: 0, y: 0}, {x: 0.09, y: 0.04}, {x: 0.18, y: 0.12}, {x: 0.23, y: 0.14},
@@ -44,6 +46,7 @@ export default function App() {
   
   // Settings State
   const [duration, setDuration] = useState(DEFAULT_SETTINGS.duration);
+  const [revealDuration, setRevealDuration] = useState(DEFAULT_SETTINGS.revealDuration);
   const [mode, setMode] = useState<'together' | 'staggered'>(DEFAULT_SETTINGS.mode as 'together' | 'staggered');
   const [resolution, setResolution] = useState(DEFAULT_SETTINGS.resolution);
   const [bgColor, setBgColor] = useState(DEFAULT_SETTINGS.bgColor);
@@ -57,6 +60,7 @@ export default function App() {
   const [particleSize, setParticleSize] = useState(DEFAULT_SETTINGS.particleSize);
   const [particleColor1, setParticleColor1] = useState(DEFAULT_SETTINGS.particleColor1);
   const [particleColor2, setParticleColor2] = useState(DEFAULT_SETTINGS.particleColor2);
+  const [particleShape, setParticleShape] = useState(DEFAULT_SETTINGS.particleShape);
   const [particleEmissionRate, setParticleEmissionRate] = useState(DEFAULT_SETTINGS.particleEmissionRate);
   const [targetPoints, setTargetPoints] = useState(DEFAULT_SETTINGS.targetPoints);
   const [baselinePoints, setBaselinePoints] = useState(DEFAULT_SETTINGS.baselinePoints);
@@ -129,8 +133,8 @@ export default function App() {
   };
 
   const getCurrentSettings = () => ({
-    duration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, pointRadius,
-    line1Color, line2Color, particleSize, particleColor1, particleColor2,
+    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, pointRadius,
+    line1Color, line2Color, particleSize, particleColor1, particleColor2, particleShape,
     particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline
   });
 
@@ -147,14 +151,15 @@ export default function App() {
       setHasUnsavedChanges(false);
     }
   }, [
-    duration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, pointRadius,
-    line1Color, line2Color, particleSize, particleColor1, particleColor2,
+    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, pointRadius,
+    line1Color, line2Color, particleSize, particleColor1, particleColor2, particleShape,
     particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline,
     currentGraphId, savedGraphs
   ]);
 
   const loadSettings = (s: any) => {
     if (s.duration !== undefined) setDuration(s.duration);
+    if (s.revealDuration !== undefined) setRevealDuration(s.revealDuration);
     if (s.mode !== undefined) setMode(s.mode === 'separate' ? 'staggered' : s.mode);
     if (s.resolution !== undefined) setResolution(s.resolution);
     if (s.bgColor !== undefined) setBgColor(s.bgColor);
@@ -167,6 +172,7 @@ export default function App() {
     if (s.particleSize !== undefined) setParticleSize(s.particleSize);
     if (s.particleColor1 !== undefined) setParticleColor1(s.particleColor1);
     if (s.particleColor2 !== undefined) setParticleColor2(s.particleColor2);
+    if (s.particleShape !== undefined) setParticleShape(s.particleShape);
     if (s.particleEmissionRate !== undefined) setParticleEmissionRate(s.particleEmissionRate);
     if (s.targetPoints !== undefined) setTargetPoints(s.targetPoints);
     if (s.baselinePoints !== undefined) setBaselinePoints(s.baselinePoints);
@@ -266,13 +272,17 @@ export default function App() {
     setIsPlaying(false);
   };
 
-  const handleExport = (format: 'webm' | 'mp4') => {
-    if (isEditorMode) setIsEditorMode(false);
-    setIsRecording(true);
-    canvasRef.current?.exportVideo(format, () => {
+  const [exportFormat, setExportFormat] = useState<'webm' | 'mp4'>('webm');
+
+  const handleRecordToggle = () => {
+    if (isRecording) {
+      canvasRef.current?.stopRecording();
       setIsRecording(false);
-      setIsPlaying(false);
-    });
+    } else {
+      if (isEditorMode) setIsEditorMode(false);
+      setIsRecording(true);
+      canvasRef.current?.startRecording(exportFormat, () => setIsRecording(false));
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -387,13 +397,13 @@ export default function App() {
           <div className="h-6 w-px bg-white/10"></div>
 
           <div className="flex items-center gap-3 flex-1 max-w-[300px]">
-            <span className="text-xs text-zinc-400 font-mono w-10 text-right">{currentTime.toFixed(1)}s</span>
+            <span className="text-xs text-zinc-400 font-mono w-10 text-right">{isNaN(currentTime) ? '0.0' : currentTime.toFixed(1)}s</span>
             <input 
               type="range" 
               min="0" 
-              max={duration + 1.5} 
+              max={isNaN(duration) || isNaN(revealDuration) ? 10 : duration + revealDuration} 
               step="0.01" 
-              value={currentTime} 
+              value={isNaN(currentTime) ? 0 : currentTime} 
               onChange={(e) => {
                 const t = Number(e.target.value);
                 setCurrentTime(t);
@@ -406,7 +416,7 @@ export default function App() {
               disabled={isRecording} 
               className="flex-1 accent-orange-500 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer" 
             />
-            <span className="text-xs text-zinc-500 font-mono w-10">{(duration + 1.5).toFixed(1)}s</span>
+            <span className="text-xs text-zinc-500 font-mono w-10">{isNaN(duration) || isNaN(revealDuration) ? '0.0' : (duration + revealDuration).toFixed(1)}s</span>
           </div>
         </div>
 
@@ -426,8 +436,24 @@ export default function App() {
             Editor
           </button>
           <div className="h-6 w-px bg-white/10 mx-1"></div>
-          <ExportButton icon={<Video className="w-4 h-4" />} label="WebM" onClick={() => handleExport('webm')} disabled={isRecording} />
-          <ExportButton icon={<Film className="w-4 h-4" />} label="MP4" onClick={() => handleExport('mp4')} disabled={isRecording} />
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleRecordToggle} 
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border ${isRecording ? 'bg-red-500/20 text-red-400 border-red-500/30 animate-pulse' : 'bg-zinc-800 hover:bg-zinc-700 text-red-400 border-white/5'}`}
+            >
+              <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-400' : 'bg-red-500'}`}></div>
+              {isRecording ? 'Recording...' : 'Record'}
+            </button>
+            <select 
+              value={exportFormat} 
+              onChange={e => setExportFormat(e.target.value as 'webm' | 'mp4')}
+              disabled={isRecording}
+              className="bg-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none disabled:opacity-50"
+            >
+              <option value="webm">WebM</option>
+              <option value="mp4">MP4</option>
+            </select>
+          </div>
         </div>
       </header>
 
@@ -452,6 +478,10 @@ export default function App() {
               <div className="flex justify-between text-xs text-zinc-400"><span>Duration</span><span>{duration}s</span></div>
               <input type="range" min="2" max="30" step="1" value={duration} onChange={(e) => setDuration(Number(e.target.value))} disabled={isRecording} className="w-full accent-orange-500" />
             </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-zinc-400"><span>Reveal Duration</span><span>{revealDuration}s</span></div>
+              <input type="range" min="0" max="10" step="0.5" value={revealDuration} onChange={(e) => setRevealDuration(Number(e.target.value))} disabled={isRecording} className="w-full accent-orange-500" />
+            </div>
           </div>
 
           <div className="h-px bg-white/5"></div>
@@ -462,11 +492,11 @@ export default function App() {
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Width</span>
-                <input type="number" value={resolution.w} onChange={e => setResolution({...resolution, w: Number(e.target.value)})} className="w-full bg-zinc-900 rounded px-2 py-1.5 text-sm text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none" />
+                <input type="number" value={isNaN(resolution.w) ? '' : resolution.w} onChange={e => setResolution({...resolution, w: parseFloat(e.target.value)})} className="w-full bg-zinc-900 rounded px-2 py-1.5 text-sm text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none" />
               </div>
               <div className="space-y-1">
                 <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Height</span>
-                <input type="number" value={resolution.h} onChange={e => setResolution({...resolution, h: Number(e.target.value)})} className="w-full bg-zinc-900 rounded px-2 py-1.5 text-sm text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none" />
+                <input type="number" value={isNaN(resolution.h) ? '' : resolution.h} onChange={e => setResolution({...resolution, h: parseFloat(e.target.value)})} className="w-full bg-zinc-900 rounded px-2 py-1.5 text-sm text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none" />
               </div>
             </div>
             <div className="grid grid-cols-4 gap-1 pt-1">
@@ -550,6 +580,34 @@ export default function App() {
           {/* Particles */}
           <div className="space-y-4">
             <h3 className="text-sm font-medium text-white flex items-center gap-2">Particles</h3>
+            <div className="space-y-2">
+              <span className="text-xs text-zinc-400 block">Shape</span>
+              <select 
+                value={particleShape} 
+                onChange={e => setParticleShape(e.target.value as any)}
+                className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
+              >
+                <option value="circle">Circle</option>
+                <option value="triangle">Triangle</option>
+                <option value="star">Star</option>
+                <option value="diamond">Diamond</option>
+                <option value="hex">Hexagon</option>
+              </select>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div className="relative w-6 h-6 rounded overflow-hidden border border-white/20">
+                  <input type="color" value={particleColor2} onChange={e => setParticleColor2(e.target.value)} className="absolute -inset-2 w-10 h-10 cursor-pointer" />
+                </div>
+                <span className="text-xs text-zinc-400">Baseline</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative w-6 h-6 rounded overflow-hidden border border-white/20">
+                  <input type="color" value={particleColor1} onChange={e => setParticleColor1(e.target.value)} className="absolute -inset-2 w-10 h-10 cursor-pointer" />
+                </div>
+                <span className="text-xs text-zinc-400">Target</span>
+              </div>
+            </div>
             <div className="space-y-2">
               <div className="flex justify-between text-xs text-zinc-400"><span>Size</span><span>{particleSize}px</span></div>
               <input type="range" min="0.5" max="10" step="0.5" value={particleSize} onChange={e => setParticleSize(Number(e.target.value))} className="w-full accent-orange-500" />
@@ -637,6 +695,7 @@ export default function App() {
             <AnimationCanvas
               ref={canvasRef}
               duration={duration}
+              revealDuration={revealDuration}
               mode={mode}
               backgroundColor={bgColor}
               showGrid={showGrid}
@@ -649,6 +708,7 @@ export default function App() {
               particleSize={particleSize}
               particleColor1={particleColor1}
               particleColor2={particleColor2}
+              particleShape={particleShape}
               particleEmissionRate={particleEmissionRate}
               targetPoints={targetPoints}
               baselinePoints={baselinePoints}
@@ -787,8 +847,8 @@ function DataPointEditor({ title, points, onChange, color, visible, onToggleVisi
                 <input 
                   type="number" 
                   step="0.01" 
-                  value={p.x} 
-                  onChange={e => { const n = [...points]; n[i].x = Number(e.target.value); onChange(n); }} 
+                  value={isNaN(p.x) ? '' : p.x} 
+                  onChange={e => { const n = [...points]; n[i].x = parseFloat(e.target.value); onChange(n); }} 
                   className="w-full bg-zinc-900 rounded px-1.5 py-0.5 text-xs text-zinc-200 border border-transparent focus:border-white/20 outline-none font-mono disabled:opacity-50" 
                   disabled={!visible}
                 />
@@ -798,8 +858,8 @@ function DataPointEditor({ title, points, onChange, color, visible, onToggleVisi
                 <input 
                   type="number" 
                   step="0.01" 
-                  value={p.y} 
-                  onChange={e => { const n = [...points]; n[i].y = Number(e.target.value); onChange(n); }} 
+                  value={isNaN(p.y) ? '' : p.y} 
+                  onChange={e => { const n = [...points]; n[i].y = parseFloat(e.target.value); onChange(n); }} 
                   className="w-full bg-zinc-900 rounded px-1.5 py-0.5 text-xs text-zinc-200 border border-transparent focus:border-white/20 outline-none font-mono disabled:opacity-50" 
                   disabled={!visible}
                 />
