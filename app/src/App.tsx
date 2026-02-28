@@ -2,6 +2,82 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Play, Pause, Square, RotateCcw, Download, Video, Film, Grid, Settings2, Image as ImageIcon, Trash2, Upload, RefreshCw, Save, Activity, Monitor, Edit3, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Clock, Eye, EyeOff, FolderOpen } from 'lucide-react';
 import AnimationCanvas, { AnimationCanvasRef } from './components/AnimationCanvas';
 
+function DraggableInput({ value, onChange, step = 1, min = -Infinity, max = Infinity, className, disabled }: any) {
+  const [isHoveringArrows, setIsHoveringArrows] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleMouseMoveHover = (e: React.MouseEvent<HTMLInputElement>) => {
+    if (!inputRef.current || disabled) return;
+    const rect = inputRef.current.getBoundingClientRect();
+    // Check if mouse is within the rightmost 20px (where the spin buttons usually are)
+    const isOverArrows = (e.clientX - rect.left) > (rect.width - 20);
+    setIsHoveringArrows(isOverArrows);
+  };
+
+  const handleMouseLeave = () => {
+    setIsHoveringArrows(false);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLInputElement>) => {
+    if (disabled || !isHoveringArrows) return;
+    e.preventDefault(); // Prevent text selection
+    const startX = e.clientX;
+    const startVal = isNaN(value) ? 0 : value;
+    let hasDragged = false;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const dx = moveEvent.clientX - startX;
+      if (Math.abs(dx) > 2) {
+        hasDragged = true;
+        let newVal = startVal + dx * step;
+        if (newVal < min) newVal = min;
+        if (newVal > max) newVal = max;
+        const decimals = step.toString().split('.')[1]?.length || 0;
+        newVal = parseFloat(newVal.toFixed(decimals));
+        onChange(newVal);
+      }
+    };
+
+    const handleMouseUp = (upEvent: MouseEvent) => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      if (!hasDragged && inputRef.current) {
+        const rect = inputRef.current.getBoundingClientRect();
+        const y = upEvent.clientY - rect.top;
+        let newVal = startVal;
+        if (y < rect.height / 2) {
+          newVal += step;
+        } else {
+          newVal -= step;
+        }
+        if (newVal < min) newVal = min;
+        if (newVal > max) newVal = max;
+        const decimals = step.toString().split('.')[1]?.length || 0;
+        newVal = parseFloat(newVal.toFixed(decimals));
+        onChange(newVal);
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  return (
+    <input
+      ref={inputRef}
+      type="number"
+      value={isNaN(value) ? '' : value}
+      onChange={e => onChange(parseFloat(e.target.value))}
+      onMouseMove={handleMouseMoveHover}
+      onMouseLeave={handleMouseLeave}
+      onMouseDown={handleMouseDown}
+      className={`${className} ${!disabled && isHoveringArrows ? 'cursor-ew-resize' : ''}`}
+      disabled={disabled}
+      step={step}
+    />
+  );
+}
+
 const DEFAULT_SETTINGS = {
   duration: 10,
   revealDuration: 1.5,
@@ -11,7 +87,18 @@ const DEFAULT_SETTINGS = {
   showGrid: true,
   showBloom: true,
   lineWidth: 2,
+  lineStyle: 'solid' as 'solid' | 'dotted',
+  lineDashLength: 10,
+  showOutline: false,
+  outlineWidth: 4,
+  outlineStyle: 'solid' as 'solid' | 'dotted',
+  outlineDashLength: 10,
+  outline1Color: '#cc4b00',
+  outline2Color: '#00a8cc',
   pointRadius: 4,
+  headShape: 'circle' as 'circle' | 'triangle' | 'star' | 'diamond' | 'hex',
+  easing: 'easeInOutCubic',
+  customBezier: { x1: 0.25, y1: 0.1, x2: 0.25, y2: 1.0 },
   line1Color: '#ff5e00', // Target
   line2Color: '#00d2ff', // Baseline
   particleSize: 2,
@@ -54,7 +141,18 @@ export default function App() {
   const [showBloom, setShowBloom] = useState(DEFAULT_SETTINGS.showBloom);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [lineWidth, setLineWidth] = useState(DEFAULT_SETTINGS.lineWidth);
+  const [lineStyle, setLineStyle] = useState(DEFAULT_SETTINGS.lineStyle);
+  const [lineDashLength, setLineDashLength] = useState(DEFAULT_SETTINGS.lineDashLength);
+  const [showOutline, setShowOutline] = useState(DEFAULT_SETTINGS.showOutline);
+  const [outlineWidth, setOutlineWidth] = useState(DEFAULT_SETTINGS.outlineWidth);
+  const [outlineStyle, setOutlineStyle] = useState(DEFAULT_SETTINGS.outlineStyle);
+  const [outlineDashLength, setOutlineDashLength] = useState(DEFAULT_SETTINGS.outlineDashLength);
+  const [outline1Color, setOutline1Color] = useState(DEFAULT_SETTINGS.outline1Color);
+  const [outline2Color, setOutline2Color] = useState(DEFAULT_SETTINGS.outline2Color);
   const [pointRadius, setPointRadius] = useState(DEFAULT_SETTINGS.pointRadius);
+  const [headShape, setHeadShape] = useState(DEFAULT_SETTINGS.headShape);
+  const [easing, setEasing] = useState(DEFAULT_SETTINGS.easing);
+  const [customBezier, setCustomBezier] = useState(DEFAULT_SETTINGS.customBezier);
   const [line1Color, setLine1Color] = useState(DEFAULT_SETTINGS.line1Color);
   const [line2Color, setLine2Color] = useState(DEFAULT_SETTINGS.line2Color);
   const [particleSize, setParticleSize] = useState(DEFAULT_SETTINGS.particleSize);
@@ -89,19 +187,13 @@ export default function App() {
   const commitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (isEditorMode) {
-      if (historyRef.current.length === 0) {
-        historyRef.current = [{ target: JSON.parse(JSON.stringify(targetPoints)), baseline: JSON.parse(JSON.stringify(baselinePoints)) }];
-        historyIndexRef.current = 0;
-      }
-    } else {
-      historyRef.current = [];
-      historyIndexRef.current = -1;
+    if (historyRef.current.length === 0) {
+      historyRef.current = [{ target: JSON.parse(JSON.stringify(targetPoints)), baseline: JSON.parse(JSON.stringify(baselinePoints)) }];
+      historyIndexRef.current = 0;
     }
-  }, [isEditorMode]);
+  }, []);
 
   useEffect(() => {
-    if (!isEditorMode) return;
     if (commitTimeoutRef.current) clearTimeout(commitTimeoutRef.current);
     commitTimeoutRef.current = setTimeout(() => {
       const newEntry = { target: JSON.parse(JSON.stringify(targetPoints)), baseline: JSON.parse(JSON.stringify(baselinePoints)) };
@@ -115,12 +207,10 @@ export default function App() {
       else historyIndexRef.current++;
       historyRef.current = newHistory;
     }, 200);
-  }, [targetPoints, baselinePoints, isEditorMode]);
+  }, [targetPoints, baselinePoints]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isEditorMode) return;
-      
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
       if (e.ctrlKey || e.metaKey) {
@@ -145,7 +235,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isEditorMode]);
+  }, []);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -197,7 +287,7 @@ export default function App() {
   };
 
   const getCurrentSettings = () => ({
-    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, pointRadius,
+    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, lineStyle, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier,
     line1Color, line2Color, particleSize, particleColor1, particleColor2, particleShape,
     particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline
   });
@@ -215,7 +305,7 @@ export default function App() {
       setHasUnsavedChanges(false);
     }
   }, [
-    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, pointRadius,
+    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, lineStyle, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier,
     line1Color, line2Color, particleSize, particleColor1, particleColor2, particleShape,
     particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline,
     currentGraphId, savedGraphs
@@ -230,7 +320,18 @@ export default function App() {
     if (s.showGrid !== undefined) setShowGrid(s.showGrid);
     if (s.showBloom !== undefined) setShowBloom(s.showBloom);
     if (s.lineWidth !== undefined) setLineWidth(s.lineWidth);
+    if (s.lineStyle !== undefined) setLineStyle(s.lineStyle);
+    if (s.lineDashLength !== undefined) setLineDashLength(s.lineDashLength);
+    if (s.showOutline !== undefined) setShowOutline(s.showOutline);
+    if (s.outlineWidth !== undefined) setOutlineWidth(s.outlineWidth);
+    if (s.outlineStyle !== undefined) setOutlineStyle(s.outlineStyle);
+    if (s.outlineDashLength !== undefined) setOutlineDashLength(s.outlineDashLength);
+    if (s.outline1Color !== undefined) setOutline1Color(s.outline1Color);
+    if (s.outline2Color !== undefined) setOutline2Color(s.outline2Color);
     if (s.pointRadius !== undefined) setPointRadius(s.pointRadius);
+    if (s.headShape !== undefined) setHeadShape(s.headShape);
+    if (s.easing !== undefined) setEasing(s.easing);
+    if (s.customBezier !== undefined) setCustomBezier(s.customBezier);
     if (s.line1Color !== undefined) setLine1Color(s.line1Color);
     if (s.line2Color !== undefined) setLine2Color(s.line2Color);
     if (s.particleSize !== undefined) setParticleSize(s.particleSize);
@@ -549,18 +650,92 @@ export default function App() {
           </div>
 
           <div className="h-px bg-white/5"></div>
-          
+
+          {/* Animation */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-medium text-white flex items-center gap-2"><Activity className="w-4 h-4"/> Animation</h3>
+            
+            <div className="space-y-2">
+              <span className="text-xs text-zinc-400 block">Easing Curve</span>
+              <select 
+                value={easing} 
+                onChange={e => setEasing(e.target.value)}
+                className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
+              >
+                <option value="linear">Linear</option>
+                <option value="easeInSine">EaseInSine</option>
+                <option value="easeOutSine">EaseOutSine</option>
+                <option value="easeInOutSine">EaseInOutSine</option>
+                <option value="easeInQuad">EaseInQuad</option>
+                <option value="easeOutQuad">EaseOutQuad</option>
+                <option value="easeInOutQuad">EaseInOutQuad</option>
+                <option value="easeInCubic">EaseInCubic</option>
+                <option value="easeOutCubic">EaseOutCubic</option>
+                <option value="easeInOutCubic">EaseInOutCubic</option>
+                <option value="easeInQuart">EaseInQuart</option>
+                <option value="easeOutQuart">EaseOutQuart</option>
+                <option value="easeInOutQuart">EaseInOutQuart</option>
+                <option value="easeInQuint">EaseInQuint</option>
+                <option value="easeOutQuint">EaseOutQuint</option>
+                <option value="easeInOutQuint">EaseInOutQuint</option>
+                <option value="easeInExpo">EaseInExpo</option>
+                <option value="easeOutExpo">EaseOutExpo</option>
+                <option value="easeInOutExpo">EaseInOutExpo</option>
+                <option value="easeInCirc">EaseInCirc</option>
+                <option value="easeOutCirc">EaseOutCirc</option>
+                <option value="easeInOutCirc">EaseInOutCirc</option>
+                <option value="easeInBack">EaseInBack</option>
+                <option value="easeOutBack">EaseOutBack</option>
+                <option value="easeInOutBack">EaseInOutBack</option>
+                <option value="easeInElastic">EaseInElastic</option>
+                <option value="easeOutElastic">EaseOutElastic</option>
+                <option value="easeInOutElastic">EaseInOutElastic</option>
+                <option value="easeInBounce">EaseInBounce</option>
+                <option value="easeOutBounce">EaseOutBounce</option>
+                <option value="easeInOutBounce">EaseInOutBounce</option>
+                <option value="smoothStep">SmoothStep</option>
+                <option value="smootherStep">SmootherStep</option>
+                <option value="spring">Spring</option>
+                <option value="hermite">Hermite</option>
+                <option value="customBezier">Custom Bezier</option>
+              </select>
+            </div>
+
+            {easing === 'customBezier' && (
+              <div className="grid grid-cols-4 gap-2">
+                <div className="space-y-1">
+                  <span className="text-[10px] text-zinc-500 uppercase">X1</span>
+                  <DraggableInput step={0.01} value={customBezier.x1} onChange={(v: number) => setCustomBezier({...customBezier, x1: v})} className="w-full bg-zinc-900 rounded px-1.5 py-1 text-xs text-zinc-200 border border-white/5" />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] text-zinc-500 uppercase">Y1</span>
+                  <DraggableInput step={0.01} value={customBezier.y1} onChange={(v: number) => setCustomBezier({...customBezier, y1: v})} className="w-full bg-zinc-900 rounded px-1.5 py-1 text-xs text-zinc-200 border border-white/5" />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] text-zinc-500 uppercase">X2</span>
+                  <DraggableInput step={0.01} value={customBezier.x2} onChange={(v: number) => setCustomBezier({...customBezier, x2: v})} className="w-full bg-zinc-900 rounded px-1.5 py-1 text-xs text-zinc-200 border border-white/5" />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] text-zinc-500 uppercase">Y2</span>
+                  <DraggableInput step={0.01} value={customBezier.y2} onChange={(v: number) => setCustomBezier({...customBezier, y2: v})} className="w-full bg-zinc-900 rounded px-1.5 py-1 text-xs text-zinc-200 border border-white/5" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="h-px bg-white/5"></div>
+
           {/* Resolution */}
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-white flex items-center gap-2"><Monitor className="w-4 h-4"/> Target Resolution</h3>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Width</span>
-                <input type="number" value={isNaN(resolution.w) ? '' : resolution.w} onChange={e => setResolution({...resolution, w: parseFloat(e.target.value)})} className="w-full bg-zinc-900 rounded px-2 py-1.5 text-sm text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none" />
+                <DraggableInput value={resolution.w} onChange={(w: number) => setResolution({...resolution, w})} step={10} className="w-full bg-zinc-900 rounded px-2 py-1.5 text-sm text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none" />
               </div>
               <div className="space-y-1">
                 <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Height</span>
-                <input type="number" value={isNaN(resolution.h) ? '' : resolution.h} onChange={e => setResolution({...resolution, h: parseFloat(e.target.value)})} className="w-full bg-zinc-900 rounded px-2 py-1.5 text-sm text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none" />
+                <DraggableInput value={resolution.h} onChange={(h: number) => setResolution({...resolution, h})} step={10} className="w-full bg-zinc-900 rounded px-2 py-1.5 text-sm text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none" />
               </div>
             </div>
             <div className="grid grid-cols-4 gap-1 pt-1">
@@ -629,14 +804,101 @@ export default function App() {
             </div>
 
             <div className="space-y-2">
+              <span className="text-xs text-zinc-400 block">Line Style</span>
+              <select 
+                value={lineStyle} 
+                onChange={e => setLineStyle(e.target.value as any)}
+                className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
+              >
+                <option value="solid">Solid</option>
+                <option value="dotted">Dotted</option>
+              </select>
+            </div>
+            {lineStyle === 'dotted' && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-zinc-400"><span>Dash Length</span><span>{lineDashLength}px</span></div>
+                <input type="range" min="1" max="50" step="1" value={lineDashLength} onChange={e => setLineDashLength(Number(e.target.value))} className="w-full accent-orange-500" />
+              </div>
+            )}
+
+            <div className="space-y-2">
               <div className="flex justify-between text-xs text-zinc-400"><span>Width</span><span>{lineWidth}px</span></div>
               <input type="range" min="1" max="10" step="1" value={lineWidth} onChange={e => setLineWidth(Number(e.target.value))} className="w-full accent-orange-500" />
             </div>
             
             <div className="space-y-2">
+              <span className="text-xs text-zinc-400 block">Head Shape</span>
+              <select 
+                value={headShape} 
+                onChange={e => setHeadShape(e.target.value as any)}
+                className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
+              >
+                <option value="circle">Circle</option>
+                <option value="triangle">Triangle</option>
+                <option value="star">Star</option>
+                <option value="diamond">Diamond</option>
+                <option value="hex">Hexagon</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
               <div className="flex justify-between text-xs text-zinc-400"><span>Head Radius</span><span>{pointRadius}px</span></div>
               <input type="range" min="0" max="20" step="1" value={pointRadius} onChange={e => setPointRadius(Number(e.target.value))} className="w-full accent-orange-500" />
             </div>
+          </div>
+
+          <div className="h-px bg-white/5"></div>
+
+          {/* Outlines */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-white flex items-center gap-2">Outlines</h3>
+              <label className="flex items-center cursor-pointer">
+                <input type="checkbox" checked={showOutline} onChange={e => setShowOutline(e.target.checked)} className="rounded bg-zinc-800 border-zinc-700 text-orange-500 focus:ring-orange-500 focus:ring-offset-zinc-900" />
+              </label>
+            </div>
+            
+            {showOutline && (
+              <>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="relative w-6 h-6 rounded overflow-hidden border border-white/20">
+                      <input type="color" value={outline2Color} onChange={e => setOutline2Color(e.target.value)} className="absolute -inset-2 w-10 h-10 cursor-pointer" />
+                    </div>
+                    <span className="text-xs text-zinc-400">Baseline</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="relative w-6 h-6 rounded overflow-hidden border border-white/20">
+                      <input type="color" value={outline1Color} onChange={e => setOutline1Color(e.target.value)} className="absolute -inset-2 w-10 h-10 cursor-pointer" />
+                    </div>
+                    <span className="text-xs text-zinc-400">Target</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-xs text-zinc-400 block">Outline Style</span>
+                  <select 
+                    value={outlineStyle} 
+                    onChange={e => setOutlineStyle(e.target.value as any)}
+                    className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
+                  >
+                    <option value="solid">Solid</option>
+                    <option value="dotted">Dotted</option>
+                  </select>
+                </div>
+                {outlineStyle === 'dotted' && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs text-zinc-400"><span>Dash Length</span><span>{outlineDashLength}px</span></div>
+                    <input type="range" min="1" max="50" step="1" value={outlineDashLength} onChange={e => setOutlineDashLength(Number(e.target.value))} className="w-full accent-orange-500" />
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs text-zinc-400"><span>Width</span><span>{outlineWidth}px</span></div>
+                  <input type="range" min="1" max="20" step="1" value={outlineWidth} onChange={e => setOutlineWidth(Number(e.target.value))} className="w-full accent-orange-500" />
+                </div>
+              </>
+            )}
           </div>
 
           <div className="h-px bg-white/5"></div>
@@ -766,7 +1028,18 @@ export default function App() {
               showBloom={showBloom}
               backgroundImage={backgroundImage}
               lineWidth={lineWidth}
+              lineStyle={lineStyle}
+              lineDashLength={lineDashLength}
+              showOutline={showOutline}
+              outlineWidth={outlineWidth}
+              outlineStyle={outlineStyle}
+              outlineDashLength={outlineDashLength}
+              outline1Color={outline1Color}
+              outline2Color={outline2Color}
               pointRadius={pointRadius}
+              headShape={headShape}
+              easing={easing}
+              customBezier={customBezier}
               line1Color={line1Color}
               line2Color={line2Color}
               particleSize={particleSize}
@@ -908,22 +1181,20 @@ function DataPointEditor({ title, points, onChange, color, visible, onToggleVisi
             <div className="flex flex-col flex-1 gap-1">
               <div className="flex items-center gap-1.5">
                 <span className="text-[9px] text-zinc-500 font-mono w-2">X</span>
-                <input 
-                  type="number" 
-                  step="0.01" 
-                  value={isNaN(p.x) ? '' : p.x} 
-                  onChange={e => { const n = [...points]; n[i] = { ...n[i], x: parseFloat(e.target.value) }; onChange(n); }} 
+                <DraggableInput 
+                  step={0.01} 
+                  value={p.x} 
+                  onChange={(val: number) => { const n = [...points]; n[i] = { ...n[i], x: val }; onChange(n); }} 
                   className="w-full bg-zinc-900 rounded px-1.5 py-0.5 text-xs text-zinc-200 border border-transparent focus:border-white/20 outline-none font-mono disabled:opacity-50" 
                   disabled={!visible}
                 />
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-[9px] text-zinc-500 font-mono w-2">Y</span>
-                <input 
-                  type="number" 
-                  step="0.01" 
-                  value={isNaN(p.y) ? '' : p.y} 
-                  onChange={e => { const n = [...points]; n[i] = { ...n[i], y: parseFloat(e.target.value) }; onChange(n); }} 
+                <DraggableInput 
+                  step={0.01} 
+                  value={p.y} 
+                  onChange={(val: number) => { const n = [...points]; n[i] = { ...n[i], y: val }; onChange(n); }} 
                   className="w-full bg-zinc-900 rounded px-1.5 py-0.5 text-xs text-zinc-200 border border-transparent focus:border-white/20 outline-none font-mono disabled:opacity-50" 
                   disabled={!visible}
                 />

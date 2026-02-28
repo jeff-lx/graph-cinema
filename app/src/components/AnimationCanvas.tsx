@@ -19,7 +19,18 @@ interface Props {
   showBloom: boolean;
   backgroundImage: string | null;
   lineWidth: number;
+  lineStyle: 'solid' | 'dotted';
+  lineDashLength: number;
+  showOutline: boolean;
+  outlineWidth: number;
+  outlineStyle: 'solid' | 'dotted';
+  outlineDashLength: number;
+  outline1Color: string;
+  outline2Color: string;
   pointRadius: number;
+  headShape: 'circle' | 'triangle' | 'star' | 'diamond' | 'hex';
+  easing: string;
+  customBezier: { x1: number, y1: number, x2: number, y2: number };
   line1Color: string;
   line2Color: string;
   particleSize: number;
@@ -82,6 +93,62 @@ function getLengths(pts: {x:number, y:number}[]) {
 
 const easeInOutCubic = (t: number) => t < .5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
 
+const easings: Record<string, (t: number, ...args: any[]) => number> = {
+  linear: (t) => t,
+  easeInSine: (t) => 1 - Math.cos((t * Math.PI) / 2),
+  easeOutSine: (t) => Math.sin((t * Math.PI) / 2),
+  easeInOutSine: (t) => -(Math.cos(Math.PI * t) - 1) / 2,
+  easeInQuad: (t) => t * t,
+  easeOutQuad: (t) => 1 - (1 - t) * (1 - t),
+  easeInOutQuad: (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2,
+  easeInCubic: (t) => t * t * t,
+  easeOutCubic: (t) => 1 - Math.pow(1 - t, 3),
+  easeInOutCubic: (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
+  easeInQuart: (t) => t * t * t * t,
+  easeOutQuart: (t) => 1 - Math.pow(1 - t, 4),
+  easeInOutQuart: (t) => t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2,
+  easeInQuint: (t) => t * t * t * t * t,
+  easeOutQuint: (t) => 1 - Math.pow(1 - t, 5),
+  easeInOutQuint: (t) => t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2,
+  easeInExpo: (t) => t === 0 ? 0 : Math.pow(2, 10 * t - 10),
+  easeOutExpo: (t) => t === 1 ? 1 : 1 - Math.pow(2, -10 * t),
+  easeInOutExpo: (t) => t === 0 ? 0 : t === 1 ? 1 : t < 0.5 ? Math.pow(2, 20 * t - 10) / 2 : (2 - Math.pow(2, -20 * t + 10)) / 2,
+  easeInCirc: (t) => 1 - Math.sqrt(1 - Math.pow(t, 2)),
+  easeOutCirc: (t) => Math.sqrt(1 - Math.pow(t - 1, 2)),
+  easeInOutCirc: (t) => t < 0.5 ? (1 - Math.sqrt(1 - Math.pow(2 * t, 2))) / 2 : (Math.sqrt(1 - Math.pow(-2 * t + 2, 2)) + 1) / 2,
+  easeInBack: (t) => { const c1 = 1.70158; const c3 = c1 + 1; return c3 * t * t * t - c1 * t * t; },
+  easeOutBack: (t) => { const c1 = 1.70158; const c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); },
+  easeInOutBack: (t) => { const c1 = 1.70158; const c2 = c1 * 1.525; return t < 0.5 ? (Math.pow(2 * t, 2) * ((c2 + 1) * 2 * t - c2)) / 2 : (Math.pow(2 * t - 2, 2) * ((c2 + 1) * (t * 2 - 2) + c2) + 2) / 2; },
+  easeInElastic: (t) => { const c4 = (2 * Math.PI) / 3; return t === 0 ? 0 : t === 1 ? 1 : -Math.pow(2, 10 * t - 10) * Math.sin((t * 10 - 10.75) * c4); },
+  easeOutElastic: (t) => { const c4 = (2 * Math.PI) / 3; return t === 0 ? 0 : t === 1 ? 1 : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1; },
+  easeInOutElastic: (t) => { const c5 = (2 * Math.PI) / 4.5; return t === 0 ? 0 : t === 1 ? 1 : t < 0.5 ? -(Math.pow(2, 20 * t - 10) * Math.sin((20 * t - 11.125) * c5)) / 2 : (Math.pow(2, -20 * t + 10) * Math.sin((20 * t - 11.125) * c5)) / 2 + 1; },
+  easeInBounce: (t) => 1 - easings.easeOutBounce(1 - t),
+  easeOutBounce: (t) => { const n1 = 7.5625; const d1 = 2.75; if (t < 1 / d1) { return n1 * t * t; } else if (t < 2 / d1) { return n1 * (t -= 1.5 / d1) * t + 0.75; } else if (t < 2.5 / d1) { return n1 * (t -= 2.25 / d1) * t + 0.9375; } else { return n1 * (t -= 2.625 / d1) * t + 0.984375; } },
+  easeInOutBounce: (t) => t < 0.5 ? (1 - easings.easeOutBounce(1 - 2 * t)) / 2 : (1 + easings.easeOutBounce(2 * t - 1)) / 2,
+  smoothStep: (t) => t * t * (3 - 2 * t),
+  smootherStep: (t) => t * t * t * (t * (t * 6 - 15) + 10),
+  spring: (t) => 1 - (Math.cos(t * 4.5 * Math.PI) * Math.exp(-t * 6)),
+  hermite: (t) => t * t * (3 - 2 * t),
+  customBezier: (t, p1x, p1y, p2x, p2y) => {
+    if (t === 0 || t === 1) return t;
+    const A = (a1: number, a2: number) => 1.0 - 3.0 * a2 + 3.0 * a1;
+    const B = (a1: number, a2: number) => 3.0 * a2 - 6.0 * a1;
+    const C = (a1: number) => 3.0 * a1;
+    const CalcBezier = (t: number, a1: number, a2: number) => ((A(a1, a2) * t + B(a1, a2)) * t + C(a1)) * t;
+    const GetTForX = (x: number, a1: number, a2: number) => {
+      let guessT = x;
+      for (let i = 0; i < 4; ++i) {
+        let currentSlope = 3.0 * A(a1, a2) * guessT * guessT + 2.0 * B(a1, a2) * guessT + C(a1);
+        if (currentSlope === 0.0) return guessT;
+        let currentX = CalcBezier(guessT, a1, a2) - x;
+        guessT -= currentX / currentSlope;
+      }
+      return guessT;
+    };
+    return CalcBezier(GetTForX(t, p1x, p2x), p1y, p2y);
+  }
+};
+
 const hexToRgb = (hex: string) => {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '255, 255, 255';
@@ -89,7 +156,7 @@ const hexToRgb = (hex: string) => {
 
 const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({ 
   duration, revealDuration, mode, backgroundColor, showGrid, showBloom, backgroundImage,
-  lineWidth, pointRadius, line1Color, line2Color,
+  lineWidth, lineStyle, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier, line1Color, line2Color,
   particleSize, particleColor1, particleColor2, particleShape, particleEmissionRate,
   targetPoints, baselinePoints, showTarget, showBaseline, targetResolution,
   isEditorMode, onTargetPointsChange, onBaselinePointsChange, onTimeUpdate,
@@ -575,6 +642,65 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       }
     };
 
+    const drawShape = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, shape: string) => {
+      if (shape === 'circle') {
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+      } else if (shape === 'triangle') {
+        const s = size * 1.5;
+        ctx.moveTo(x, y - s);
+        ctx.lineTo(x + s, y + s);
+        ctx.lineTo(x - s, y + s);
+        ctx.closePath();
+      } else if (shape === 'star') {
+        const s = size * 1.5;
+        for (let j = 0; j < 5; j++) {
+          const angle = (j * 4 * Math.PI) / 5 - Math.PI / 2;
+          const px = x + Math.cos(angle) * s;
+          const py = y + Math.sin(angle) * s;
+          if (j === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+      } else if (shape === 'diamond') {
+        const s = size * 1.5;
+        ctx.moveTo(x, y - s);
+        ctx.lineTo(x + s, y);
+        ctx.lineTo(x, y + s);
+        ctx.lineTo(x - s, y);
+        ctx.closePath();
+      } else if (shape === 'hex') {
+        const s = size * 1.5;
+        for (let j = 0; j < 6; j++) {
+          const angle = (j * Math.PI) / 3;
+          const px = x + Math.cos(angle) * s;
+          const py = y + Math.sin(angle) * s;
+          if (j === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+      }
+    };
+
+    const drawOutline = (pts: {x:number, y:number}[], color: string) => {
+      if (!ctx || pts.length === 0) return;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        ctx.lineTo(pts[i].x, pts[i].y);
+      }
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = outlineWidth;
+      ctx.strokeStyle = color;
+      if (outlineStyle === 'dotted') {
+        ctx.setLineDash([outlineDashLength, outlineDashLength]);
+      } else {
+        ctx.setLineDash([]);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    };
+
     const drawLine = (pts: {x:number, y:number}[], lengths: number[], totalLength: number, progress: number, color: string) => {
       if (!ctx || progress <= 0 || pts.length === 0) return null;
       const targetLen = totalLength * progress;
@@ -606,6 +732,12 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       
+      if (lineStyle === 'dotted') {
+        ctx.setLineDash([lineDashLength, lineDashLength]);
+      } else {
+        ctx.setLineDash([]);
+      }
+
       // Glow effect using filter for perfect smooth gradients
       ctx.save();
       ctx.filter = `blur(${lineWidth * 4}px)`;
@@ -623,19 +755,21 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       ctx.strokeStyle = '#fff';
       ctx.stroke();
 
+      ctx.setLineDash([]); // Reset dash
+
       if (pointRadius > 0) {
         // Draw head glow
         ctx.save();
         ctx.filter = `blur(${pointRadius * 1.5}px)`;
         ctx.beginPath();
-        ctx.arc(currentPos.x, currentPos.y, pointRadius * 2, 0, Math.PI * 2);
+        drawShape(ctx, currentPos.x, currentPos.y, pointRadius * 2, headShape);
         ctx.fillStyle = color;
         ctx.fill();
         ctx.restore();
 
         // Draw head core
         ctx.beginPath();
-        ctx.arc(currentPos.x, currentPos.y, pointRadius, 0, Math.PI * 2);
+        drawShape(ctx, currentPos.x, currentPos.y, pointRadius, headShape);
         ctx.fillStyle = '#fff';
         ctx.fill();
       }
@@ -694,7 +828,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
         state.progress = 1;
         state.fillProgress = 1;
         state.isPlaying = false;
-        if (onTimeUpdate) onTimeUpdate(duration);
+        if (onTimeUpdate) onTimeUpdate(duration + revealDuration);
       } else {
         if (state.isPlaying) {
           const dt = (time - state.lastTime) / 1000;
@@ -728,24 +862,37 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
 
       drawBackground();
 
+      if (showOutline) {
+        if (showTarget) drawOutline(orangePts, outline1Color);
+        if (showBaseline) drawOutline(bluePts, outline2Color);
+      }
+
       let orangeProg = 0;
       let blueProg = 0;
 
+      const easeFn = easings[easing] || easings.linear;
+      const getEased = (t: number) => {
+        if (easing === 'customBezier') {
+          return easeFn(t, customBezier.x1, customBezier.y1, customBezier.x2, customBezier.y2);
+        }
+        return easeFn(t);
+      };
+
       if (mode === 'together') {
-        orangeProg = easeInOutCubic(state.progress);
-        blueProg = easeInOutCubic(state.progress);
+        orangeProg = getEased(state.progress);
+        blueProg = getEased(state.progress);
       } else if (mode === 'staggered') {
         if (state.progress < 0.5) {
-          orangeProg = easeInOutCubic(state.progress * 2);
+          orangeProg = getEased(state.progress * 2);
           blueProg = 0;
         } else {
           orangeProg = 1;
-          blueProg = easeInOutCubic((state.progress - 0.5) * 2);
+          blueProg = getEased((state.progress - 0.5) * 2);
         }
       }
 
       if (state.progress >= 1 && showTarget && showBaseline && revealDuration > 0) {
-        drawFill(easeInOutCubic(state.fillProgress));
+        drawFill(getEased(state.fillProgress));
       }
 
       const orangePos = showTarget ? drawLine(orangePts, orangeData.lengths, orangeData.total, orangeProg, line1Color) : null;
@@ -834,7 +981,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
     };
   }, [
     duration, revealDuration, mode, backgroundColor, showGrid, showBloom, backgroundImage,
-    lineWidth, pointRadius, line1Color, line2Color,
+    lineWidth, lineStyle, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier, line1Color, line2Color,
     particleSize, particleColor1, particleColor2, particleShape, particleEmissionRate,
     targetPoints, baselinePoints, targetResolution.w, targetResolution.h,
     isEditorMode, showTarget, showBaseline
