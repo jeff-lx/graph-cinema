@@ -117,7 +117,9 @@ const DEFAULT_SETTINGS = {
     {x: 0.27, y: 0.25}, {x: 0.36, y: 0.34}, {x: 0.45, y: 0.39}, {x: 0.55, y: 0.41},
     {x: 0.59, y: 0.46}, {x: 0.68, y: 0.51}, {x: 0.73, y: 0.58}, {x: 0.80, y: 0.61},
     {x: 0.88, y: 0.70}, {x: 0.95, y: 0.78}, {x: 1.0, y: 0.89}
-  ]
+  ],
+  showTarget: true,
+  showBaseline: true
 };
 
 export default function App() {
@@ -509,21 +511,36 @@ export default function App() {
 
   const handleRestoreDefaults = () => {
     setDuration(DEFAULT_SETTINGS.duration);
+    setRevealDuration(DEFAULT_SETTINGS.revealDuration);
     setMode(DEFAULT_SETTINGS.mode);
     setResolution(DEFAULT_SETTINGS.resolution);
     setBgColor(DEFAULT_SETTINGS.bgColor);
     setShowGrid(DEFAULT_SETTINGS.showGrid);
     setShowBloom(DEFAULT_SETTINGS.showBloom);
     setLineWidth(DEFAULT_SETTINGS.lineWidth);
+    setLineStyle(DEFAULT_SETTINGS.lineStyle);
+    setLineDashLength(DEFAULT_SETTINGS.lineDashLength);
+    setShowOutline(DEFAULT_SETTINGS.showOutline);
+    setOutlineWidth(DEFAULT_SETTINGS.outlineWidth);
+    setOutlineStyle(DEFAULT_SETTINGS.outlineStyle);
+    setOutlineDashLength(DEFAULT_SETTINGS.outlineDashLength);
+    setOutline1Color(DEFAULT_SETTINGS.outline1Color);
+    setOutline2Color(DEFAULT_SETTINGS.outline2Color);
     setPointRadius(DEFAULT_SETTINGS.pointRadius);
+    setHeadShape(DEFAULT_SETTINGS.headShape);
+    setEasing(DEFAULT_SETTINGS.easing);
+    setCustomBezier(DEFAULT_SETTINGS.customBezier);
     setLine1Color(DEFAULT_SETTINGS.line1Color);
     setLine2Color(DEFAULT_SETTINGS.line2Color);
     setParticleSize(DEFAULT_SETTINGS.particleSize);
     setParticleColor1(DEFAULT_SETTINGS.particleColor1);
     setParticleColor2(DEFAULT_SETTINGS.particleColor2);
+    setParticleShape(DEFAULT_SETTINGS.particleShape);
     setParticleEmissionRate(DEFAULT_SETTINGS.particleEmissionRate);
-    setTargetPoints(DEFAULT_SETTINGS.targetPoints);
-    setBaselinePoints(DEFAULT_SETTINGS.baselinePoints);
+    setTargetPoints(JSON.parse(JSON.stringify(DEFAULT_SETTINGS.targetPoints)));
+    setBaselinePoints(JSON.parse(JSON.stringify(DEFAULT_SETTINGS.baselinePoints)));
+    setShowTarget(DEFAULT_SETTINGS.showTarget);
+    setShowBaseline(DEFAULT_SETTINGS.showBaseline);
     setBackgroundImage(null);
   };
 
@@ -637,7 +654,7 @@ export default function App() {
         <aside className={`w-80 shrink-0 border-r border-white/10 bg-zinc-900/30 overflow-y-auto p-5 space-y-8 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent transition-all duration-300 ${showLeftSidebar ? 'ml-0' : '-ml-80'}`}>
           
           {/* Animation Settings */}
-          <div className="space-y-3">
+          <div className="space-y-4">
             <h3 className="text-sm font-medium text-white flex items-center gap-2"><Clock className="w-4 h-4"/> Animation</h3>
             <div className="space-y-2">
               <div className="flex justify-between text-xs text-zinc-400"><span>Duration</span><span>{duration}s</span></div>
@@ -647,13 +664,6 @@ export default function App() {
               <div className="flex justify-between text-xs text-zinc-400"><span>Reveal Duration</span><span>{revealDuration}s</span></div>
               <input type="range" min="0" max="10" step="0.5" value={revealDuration} onChange={(e) => setRevealDuration(Number(e.target.value))} disabled={isRecording} className="w-full accent-orange-500" />
             </div>
-          </div>
-
-          <div className="h-px bg-white/5"></div>
-
-          {/* Animation */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium text-white flex items-center gap-2"><Activity className="w-4 h-4"/> Animation</h3>
             
             <div className="space-y-2">
               <span className="text-xs text-zinc-400 block">Easing Curve</span>
