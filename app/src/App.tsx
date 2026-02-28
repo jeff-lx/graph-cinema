@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { Play, Pause, RotateCcw, Download, Video, Film, Grid, Settings2, Image as ImageIcon, Trash2, Upload, RefreshCw, Save, Activity, Monitor, Edit3, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Clock } from 'lucide-react';
+import React, { useRef, useState, useEffect } from 'react';
+import { Play, Pause, RotateCcw, Download, Video, Film, Grid, Settings2, Image as ImageIcon, Trash2, Upload, RefreshCw, Save, Activity, Monitor, Edit3, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Clock, Eye, EyeOff, FolderOpen } from 'lucide-react';
 import AnimationCanvas, { AnimationCanvasRef } from './components/AnimationCanvas';
 
 const DEFAULT_SETTINGS = {
@@ -44,7 +44,7 @@ export default function App() {
   
   // Settings State
   const [duration, setDuration] = useState(DEFAULT_SETTINGS.duration);
-  const [mode, setMode] = useState<'together' | 'separate' | 'target-only' | 'baseline-only'>(DEFAULT_SETTINGS.mode);
+  const [mode, setMode] = useState<'together' | 'staggered'>(DEFAULT_SETTINGS.mode as 'together' | 'staggered');
   const [resolution, setResolution] = useState(DEFAULT_SETTINGS.resolution);
   const [bgColor, setBgColor] = useState(DEFAULT_SETTINGS.bgColor);
   const [showGrid, setShowGrid] = useState(DEFAULT_SETTINGS.showGrid);
@@ -60,6 +60,105 @@ export default function App() {
   const [particleEmissionRate, setParticleEmissionRate] = useState(DEFAULT_SETTINGS.particleEmissionRate);
   const [targetPoints, setTargetPoints] = useState(DEFAULT_SETTINGS.targetPoints);
   const [baselinePoints, setBaselinePoints] = useState(DEFAULT_SETTINGS.baselinePoints);
+  const [showTarget, setShowTarget] = useState(true);
+  const [showBaseline, setShowBaseline] = useState(true);
+
+  // Save System State
+  const [savedGraphs, setSavedGraphs] = useState<{id: string, name: string, settings: any}[]>([]);
+  const [currentGraphId, setCurrentGraphId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('graphCinemaSavedGraphs');
+    if (saved) {
+      try {
+        setSavedGraphs(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to load saved graphs", e);
+      }
+    }
+  }, []);
+
+  const saveToLocalStorage = (graphs: any[]) => {
+    localStorage.setItem('graphCinemaSavedGraphs', JSON.stringify(graphs));
+    setSavedGraphs(graphs);
+  };
+
+  const getCurrentSettings = () => ({
+    duration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, pointRadius,
+    line1Color, line2Color, particleSize, particleColor1, particleColor2,
+    particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline
+  });
+
+  const loadSettings = (s: any) => {
+    if (s.duration !== undefined) setDuration(s.duration);
+    if (s.mode !== undefined) setMode(s.mode === 'separate' ? 'staggered' : s.mode);
+    if (s.resolution !== undefined) setResolution(s.resolution);
+    if (s.bgColor !== undefined) setBgColor(s.bgColor);
+    if (s.showGrid !== undefined) setShowGrid(s.showGrid);
+    if (s.showBloom !== undefined) setShowBloom(s.showBloom);
+    if (s.lineWidth !== undefined) setLineWidth(s.lineWidth);
+    if (s.pointRadius !== undefined) setPointRadius(s.pointRadius);
+    if (s.line1Color !== undefined) setLine1Color(s.line1Color);
+    if (s.line2Color !== undefined) setLine2Color(s.line2Color);
+    if (s.particleSize !== undefined) setParticleSize(s.particleSize);
+    if (s.particleColor1 !== undefined) setParticleColor1(s.particleColor1);
+    if (s.particleColor2 !== undefined) setParticleColor2(s.particleColor2);
+    if (s.particleEmissionRate !== undefined) setParticleEmissionRate(s.particleEmissionRate);
+    if (s.targetPoints !== undefined) setTargetPoints(s.targetPoints);
+    if (s.baselinePoints !== undefined) setBaselinePoints(s.baselinePoints);
+    if (s.showTarget !== undefined) setShowTarget(s.showTarget);
+    if (s.showBaseline !== undefined) setShowBaseline(s.showBaseline);
+  };
+
+  const handleSaveGraph = () => {
+    if (currentGraphId) {
+      const updated = savedGraphs.map(g => g.id === currentGraphId ? { ...g, settings: getCurrentSettings() } : g);
+      saveToLocalStorage(updated);
+    } else {
+      handleSaveGraphAs();
+    }
+  };
+
+  const handleSaveGraphAs = () => {
+    const name = window.prompt("Enter a name for this graph:");
+    if (name) {
+      const newGraph = { id: Date.now().toString(), name, settings: getCurrentSettings() };
+      saveToLocalStorage([...savedGraphs, newGraph]);
+      setCurrentGraphId(newGraph.id);
+    }
+  };
+
+  const handleLoadGraph = (id: string) => {
+    if (!id) {
+      setCurrentGraphId(null);
+      return;
+    }
+    const graph = savedGraphs.find(g => g.id === id);
+    if (graph) {
+      loadSettings(graph.settings);
+      setCurrentGraphId(id);
+    }
+  };
+
+  const handleDeleteGraph = () => {
+    if (!currentGraphId) return;
+    if (window.confirm("Are you sure you want to delete this saved graph?")) {
+      const updated = savedGraphs.filter(g => g.id !== currentGraphId);
+      saveToLocalStorage(updated);
+      setCurrentGraphId(null);
+    }
+  };
+
+  const handleRenameGraph = () => {
+    if (!currentGraphId) return;
+    const graph = savedGraphs.find(g => g.id === currentGraphId);
+    if (!graph) return;
+    const newName = window.prompt("Enter new name:", graph.name);
+    if (newName && newName !== graph.name) {
+      const updated = savedGraphs.map(g => g.id === currentGraphId ? { ...g, name: newName } : g);
+      saveToLocalStorage(updated);
+    }
+  };
 
   const handlePlayPause = () => {
     if (isEditorMode) setIsEditorMode(false);
@@ -190,9 +289,7 @@ export default function App() {
 
           <div className="flex bg-zinc-800/50 rounded-lg p-1 gap-1 border border-white/5">
             <button onClick={() => setMode('together')} disabled={isRecording} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${mode === 'together' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>Together</button>
-            <button onClick={() => setMode('separate')} disabled={isRecording} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${mode === 'separate' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>Separate</button>
-            <button onClick={() => setMode('baseline-only')} disabled={isRecording} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${mode === 'baseline-only' ? 'bg-zinc-700 text-cyan-400 shadow-sm' : 'text-zinc-400 hover:text-cyan-400/70'}`}>Baseline Only</button>
-            <button onClick={() => setMode('target-only')} disabled={isRecording} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${mode === 'target-only' ? 'bg-zinc-700 text-orange-400 shadow-sm' : 'text-zinc-400 hover:text-orange-400/70'}`}>Target Only</button>
+            <button onClick={() => setMode('staggered')} disabled={isRecording} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${mode === 'staggered' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>Staggered</button>
           </div>
 
           <div className="h-6 w-px bg-white/10"></div>
@@ -232,12 +329,12 @@ export default function App() {
       </header>
 
       {/* Main Layout */}
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden relative group/layout">
         
         {/* Left Sidebar Toggle */}
         <button 
           onClick={() => setShowLeftSidebar(!showLeftSidebar)}
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1 rounded-r-md border border-l-0 border-white/10 shadow-lg transition-colors"
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1 rounded-r-md border border-l-0 border-white/10 shadow-lg transition-all opacity-0 group-hover/layout:opacity-100"
         >
           {showLeftSidebar ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
         </button>
@@ -353,7 +450,44 @@ export default function App() {
 
           {/* Manage Settings */}
           <div className="space-y-3 pb-4">
-            <h3 className="text-sm font-medium text-white flex items-center gap-2">Manage Settings</h3>
+            <h3 className="text-sm font-medium text-white flex items-center gap-2"><Save className="w-4 h-4"/> Saved Graphs</h3>
+            
+            <div className="space-y-2">
+              <select 
+                value={currentGraphId || ''} 
+                onChange={(e) => handleLoadGraph(e.target.value)}
+                className="w-full bg-zinc-900 rounded px-2 py-2 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
+              >
+                <option value="">-- Select Saved Graph --</option>
+                {savedGraphs.map(g => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={handleSaveGraph} className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 text-xs rounded transition-colors border border-orange-500/30">
+                  <Save className="w-3.5 h-3.5" /> Save
+                </button>
+                <button onClick={handleSaveGraphAs} className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs rounded transition-colors border border-white/5">
+                  Save As
+                </button>
+              </div>
+              
+              {currentGraphId && (
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button onClick={handleRenameGraph} className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs rounded transition-colors border border-white/5">
+                    <Edit3 className="w-3.5 h-3.5" /> Rename
+                  </button>
+                  <button onClick={handleDeleteGraph} className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs rounded transition-colors border border-red-500/20">
+                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="h-px bg-white/5 my-4"></div>
+
+            <h3 className="text-sm font-medium text-white flex items-center gap-2">Import / Export</h3>
             <div className="flex flex-col gap-2">
               <button onClick={handleExportSettings} className="flex items-center justify-center gap-2 w-full px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 rounded-md transition-colors border border-white/5">
                 <Download className="w-3.5 h-3.5" /> Export JSON
@@ -398,6 +532,8 @@ export default function App() {
               particleEmissionRate={particleEmissionRate}
               targetPoints={targetPoints}
               baselinePoints={baselinePoints}
+              showTarget={showTarget}
+              showBaseline={showBaseline}
               targetResolution={resolution}
               isEditorMode={isEditorMode}
               onTargetPointsChange={setTargetPoints}
@@ -419,7 +555,7 @@ export default function App() {
         {/* Right Sidebar Toggle */}
         <button 
           onClick={() => setShowRightSidebar(!showRightSidebar)}
-          className="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1 rounded-l-md border border-r-0 border-white/10 shadow-lg transition-colors"
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1 rounded-l-md border border-r-0 border-white/10 shadow-lg transition-all opacity-0 group-hover/layout:opacity-100"
         >
           {showRightSidebar ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
         </button>
@@ -432,10 +568,10 @@ export default function App() {
           </div>
           <div className="flex-1 flex overflow-hidden">
             <div className="flex-1 border-r border-white/5 p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
-              <DataPointEditor title="Baseline" points={baselinePoints} onChange={setBaselinePoints} color={line2Color} />
+              <DataPointEditor title="Baseline" points={baselinePoints} onChange={setBaselinePoints} color={line2Color} visible={showBaseline} onToggleVisibility={() => setShowBaseline(!showBaseline)} />
             </div>
             <div className="flex-1 p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
-              <DataPointEditor title="Target" points={targetPoints} onChange={setTargetPoints} color={line1Color} />
+              <DataPointEditor title="Target" points={targetPoints} onChange={setTargetPoints} color={line1Color} visible={showTarget} onToggleVisibility={() => setShowTarget(!showTarget)} />
             </div>
           </div>
         </aside>
@@ -458,11 +594,14 @@ function ExportButton({ icon, label, onClick, disabled }: { icon: React.ReactNod
   );
 }
 
-function DataPointEditor({ title, points, onChange, color }: { title: string, points: {x: number, y: number}[], onChange: (pts: {x: number, y: number}[]) => void, color: string }) {
+function DataPointEditor({ title, points, onChange, color, visible, onToggleVisibility }: { title: string, points: {x: number, y: number}[], onChange: (pts: {x: number, y: number}[]) => void, color: string, visible: boolean, onToggleVisibility: () => void }) {
   return (
-    <div className="space-y-3 flex flex-col h-full">
+    <div className={`space-y-3 flex flex-col h-full ${!visible ? 'opacity-50' : ''}`}>
       <div className="flex justify-between items-center text-sm">
         <div className="flex items-center gap-2">
+          <button onClick={onToggleVisibility} className="text-zinc-400 hover:text-white transition-colors" title={visible ? "Hide" : "Show"}>
+            {visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+          </button>
           <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }}></div>
           <span className="font-medium text-white">{title}</span>
         </div>
@@ -473,6 +612,7 @@ function DataPointEditor({ title, points, onChange, color }: { title: string, po
           }} 
           className="text-xs hover:text-white transition-colors"
           style={{ color }}
+          disabled={!visible}
         >
           + Add
         </button>
@@ -488,7 +628,8 @@ function DataPointEditor({ title, points, onChange, color }: { title: string, po
                   step="0.01" 
                   value={p.x} 
                   onChange={e => { const n = [...points]; n[i].x = Number(e.target.value); onChange(n); }} 
-                  className="w-full bg-zinc-900 rounded px-1.5 py-0.5 text-xs text-zinc-200 border border-transparent focus:border-white/20 outline-none font-mono" 
+                  className="w-full bg-zinc-900 rounded px-1.5 py-0.5 text-xs text-zinc-200 border border-transparent focus:border-white/20 outline-none font-mono disabled:opacity-50" 
+                  disabled={!visible}
                 />
               </div>
               <div className="flex items-center gap-1.5">
@@ -498,14 +639,16 @@ function DataPointEditor({ title, points, onChange, color }: { title: string, po
                   step="0.01" 
                   value={p.y} 
                   onChange={e => { const n = [...points]; n[i].y = Number(e.target.value); onChange(n); }} 
-                  className="w-full bg-zinc-900 rounded px-1.5 py-0.5 text-xs text-zinc-200 border border-transparent focus:border-white/20 outline-none font-mono" 
+                  className="w-full bg-zinc-900 rounded px-1.5 py-0.5 text-xs text-zinc-200 border border-transparent focus:border-white/20 outline-none font-mono disabled:opacity-50" 
+                  disabled={!visible}
                 />
               </div>
             </div>
             <button 
               onClick={() => { const n = [...points]; n.splice(i, 1); onChange(n); }} 
-              className="p-1.5 text-zinc-600 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors"
+              className="p-1.5 text-zinc-600 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-zinc-600"
               title="Remove Point"
+              disabled={!visible}
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>

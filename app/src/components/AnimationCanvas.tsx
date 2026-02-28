@@ -9,7 +9,7 @@ export interface AnimationCanvasRef {
 
 interface Props {
   duration: number;
-  mode: 'together' | 'separate' | 'target-only' | 'baseline-only';
+  mode: 'together' | 'staggered';
   backgroundColor: string;
   showGrid: boolean;
   showBloom: boolean;
@@ -24,6 +24,8 @@ interface Props {
   particleEmissionRate: number;
   targetPoints: {x: number, y: number}[];
   baselinePoints: {x: number, y: number}[];
+  showTarget: boolean;
+  showBaseline: boolean;
   targetResolution: { w: number, h: number };
   isEditorMode?: boolean;
   onTargetPointsChange?: (pts: {x: number, y: number}[]) => void;
@@ -84,7 +86,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
   duration, mode, backgroundColor, showGrid, showBloom, backgroundImage,
   lineWidth, pointRadius, line1Color, line2Color,
   particleSize, particleColor1, particleColor2, particleEmissionRate,
-  targetPoints, baselinePoints, targetResolution,
+  targetPoints, baselinePoints, showTarget, showBaseline, targetResolution,
   isEditorMode, onTargetPointsChange, onBaselinePointsChange, onTimeUpdate,
   onPlayStateChange 
 }, ref) => {
@@ -105,10 +107,10 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
     exportFormat: 'webm'
   });
 
-  const latestProps = useRef({ targetPoints, baselinePoints, onTargetPointsChange, onBaselinePointsChange, isEditorMode, targetResolution });
+  const latestProps = useRef({ targetPoints, baselinePoints, onTargetPointsChange, onBaselinePointsChange, isEditorMode, targetResolution, showTarget, showBaseline });
   useEffect(() => {
-    latestProps.current = { targetPoints, baselinePoints, onTargetPointsChange, onBaselinePointsChange, isEditorMode, targetResolution };
-  }, [targetPoints, baselinePoints, onTargetPointsChange, onBaselinePointsChange, isEditorMode, targetResolution]);
+    latestProps.current = { targetPoints, baselinePoints, onTargetPointsChange, onBaselinePointsChange, isEditorMode, targetResolution, showTarget, showBaseline };
+  }, [targetPoints, baselinePoints, onTargetPointsChange, onBaselinePointsChange, isEditorMode, targetResolution, showTarget, showBaseline]);
 
   const dragState = useRef({
     isDragging: false,
@@ -278,8 +280,8 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
         });
       };
       
-      checkPoints(latestProps.current.targetPoints, 'target');
-      checkPoints(latestProps.current.baselinePoints, 'baseline');
+      if (latestProps.current.showTarget) checkPoints(latestProps.current.targetPoints, 'target');
+      if (latestProps.current.showBaseline) checkPoints(latestProps.current.baselinePoints, 'baseline');
       
       if (hitType) {
         dragState.current.isDragging = true;
@@ -321,8 +323,8 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
           });
         };
         
-        checkPoints(latestProps.current.targetPoints, 'target');
-        checkPoints(latestProps.current.baselinePoints, 'baseline');
+        if (latestProps.current.showTarget) checkPoints(latestProps.current.targetPoints, 'target');
+        if (latestProps.current.showBaseline) checkPoints(latestProps.current.baselinePoints, 'baseline');
         
         if (hitType !== dragState.current.hoveredType || hitIndex !== dragState.current.hoveredIndex) {
           dragState.current.hoveredType = hitType;
@@ -614,7 +616,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       if (mode === 'together') {
         orangeProg = easeInOutCubic(state.progress);
         blueProg = easeInOutCubic(state.progress);
-      } else if (mode === 'separate') {
+      } else if (mode === 'staggered') {
         if (state.progress < 0.5) {
           orangeProg = easeInOutCubic(state.progress * 2);
           blueProg = 0;
@@ -622,20 +624,14 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
           orangeProg = 1;
           blueProg = easeInOutCubic((state.progress - 0.5) * 2);
         }
-      } else if (mode === 'target-only') {
-        orangeProg = easeInOutCubic(state.progress);
-        blueProg = 0;
-      } else if (mode === 'baseline-only') {
-        orangeProg = 0;
-        blueProg = easeInOutCubic(state.progress);
       }
 
-      if (state.progress >= 1 && (mode === 'together' || mode === 'separate')) {
+      if (state.progress >= 1 && showTarget && showBaseline) {
         drawFill(easeInOutCubic(state.fillProgress));
       }
 
-      const orangePos = drawLine(orangePts, orangeData.lengths, orangeData.total, orangeProg, line1Color);
-      const bluePos = drawLine(bluePts, blueData.lengths, blueData.total, blueProg, line2Color);
+      const orangePos = showTarget ? drawLine(orangePts, orangeData.lengths, orangeData.total, orangeProg, line1Color) : null;
+      const bluePos = showBaseline ? drawLine(bluePts, blueData.lengths, blueData.total, blueProg, line2Color) : null;
 
       if (state.isPlaying && !isEditorMode) {
         if (orangePos && orangeProg < 1) spawnParticles(orangePos, particleColor1);
@@ -670,8 +666,8 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       }
 
       if (isEditorMode) {
-        drawEditorPoints(baselinePoints, line2Color, 'baseline');
-        drawEditorPoints(targetPoints, line1Color, 'target');
+        if (showBaseline) drawEditorPoints(baselinePoints, line2Color, 'baseline');
+        if (showTarget) drawEditorPoints(targetPoints, line1Color, 'target');
       }
 
       animationFrameId = requestAnimationFrame(render);
@@ -688,7 +684,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
     lineWidth, pointRadius, line1Color, line2Color,
     particleSize, particleColor1, particleColor2, particleEmissionRate,
     targetPoints, baselinePoints, targetResolution.w, targetResolution.h,
-    isEditorMode
+    isEditorMode, showTarget, showBaseline
   ]);
 
   return (
