@@ -25,6 +25,10 @@ interface Props {
   targetPoints: {x: number, y: number}[];
   baselinePoints: {x: number, y: number}[];
   targetResolution: { w: number, h: number };
+  isEditorMode?: boolean;
+  onTargetPointsChange?: (pts: {x: number, y: number}[]) => void;
+  onBaselinePointsChange?: (pts: {x: number, y: number}[]) => void;
+  onTimeUpdate?: (time: number) => void;
   onPlayStateChange: (isPlaying: boolean) => void;
 }
 
@@ -81,6 +85,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
   lineWidth, pointRadius, line1Color, line2Color,
   particleSize, particleColor1, particleColor2, particleEmissionRate,
   targetPoints, baselinePoints, targetResolution,
+  isEditorMode, onTargetPointsChange, onBaselinePointsChange, onTimeUpdate,
   onPlayStateChange 
 }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -98,6 +103,19 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
     chunks: [] as BlobPart[],
     onExportComplete: null as (() => void) | null,
     exportFormat: 'webm'
+  });
+
+  const latestProps = useRef({ targetPoints, baselinePoints, onTargetPointsChange, onBaselinePointsChange, isEditorMode, targetResolution });
+  useEffect(() => {
+    latestProps.current = { targetPoints, baselinePoints, onTargetPointsChange, onBaselinePointsChange, isEditorMode, targetResolution };
+  }, [targetPoints, baselinePoints, onTargetPointsChange, onBaselinePointsChange, isEditorMode, targetResolution]);
+
+  const dragState = useRef({
+    isDragging: false,
+    type: null as 'target' | 'baseline' | null,
+    index: -1,
+    hoveredType: null as 'target' | 'baseline' | null,
+    hoveredIndex: -1
   });
 
   // Load background image
@@ -196,6 +214,157 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       }
     }
   }));
+
+  // Mouse events for Editor Mode
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const getNormCoords = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const { w: width, h: height } = latestProps.current.targetResolution;
+      
+      const canvasAspect = width / height;
+      const clientAspect = rect.width / rect.height;
+      
+      let renderedWidth = rect.width;
+      let renderedHeight = rect.height;
+      
+      if (canvasAspect > clientAspect) {
+        renderedHeight = rect.width / canvasAspect;
+      } else {
+        renderedWidth = rect.height * canvasAspect;
+      }
+      
+      const offsetX = (rect.width - renderedWidth) / 2;
+      const offsetY = (rect.height - renderedHeight) / 2;
+      
+      const mouseX = e.clientX - rect.left - offsetX;
+      const mouseY = e.clientY - rect.top - offsetY;
+      
+      const canvasX = mouseX * (width / renderedWidth);
+      const canvasY = mouseY * (height / renderedHeight);
+      
+      const padding = Math.max(40, Math.min(width, height) * 0.08);
+      
+      let normX = (canvasX - padding) / (width - padding * 2);
+      let normY = (height - padding - canvasY) / (height - padding * 2);
+      
+      normX = Math.max(0, Math.min(1, normX));
+      normY = Math.max(0, Math.min(1, normY));
+      
+      return { normX, normY };
+    };
+
+    const handleMouseDown = (e: MouseEvent) => {
+      if (!latestProps.current.isEditorMode) return;
+      const coords = getNormCoords(e);
+      if (!coords) return;
+      
+      let closestDist = 0.05;
+      let hitType: 'target' | 'baseline' | null = null;
+      let hitIndex = -1;
+      
+      const checkPoints = (pts: {x:number, y:number}[], type: 'target' | 'baseline') => {
+        pts.forEach((p, i) => {
+          const dx = p.x - coords.normX;
+          const dy = p.y - coords.normY;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          if (dist < closestDist) {
+            closestDist = dist;
+            hitType = type;
+            hitIndex = i;
+          }
+        });
+      };
+      
+      checkPoints(latestProps.current.targetPoints, 'target');
+      checkPoints(latestProps.current.baselinePoints, 'baseline');
+      
+      if (hitType) {
+        dragState.current.isDragging = true;
+        dragState.current.type = hitType;
+        dragState.current.index = hitIndex;
+      }
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!latestProps.current.isEditorMode) return;
+      const coords = getNormCoords(e);
+      if (!coords) return;
+
+      if (dragState.current.isDragging) {
+        const { type, index } = dragState.current;
+        const pts = type === 'target' ? [...latestProps.current.targetPoints] : [...latestProps.current.baselinePoints];
+        pts[index] = { x: coords.normX, y: coords.normY };
+        
+        if (type === 'target' && latestProps.current.onTargetPointsChange) {
+          latestProps.current.onTargetPointsChange(pts);
+        } else if (type === 'baseline' && latestProps.current.onBaselinePointsChange) {
+          latestProps.current.onBaselinePointsChange(pts);
+        }
+      } else {
+        let closestDist = 0.05;
+        let hitType: 'target' | 'baseline' | null = null;
+        let hitIndex = -1;
+        
+        const checkPoints = (pts: {x:number, y:number}[], type: 'target' | 'baseline') => {
+          pts.forEach((p, i) => {
+            const dx = p.x - coords.normX;
+            const dy = p.y - coords.normY;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < closestDist) {
+              closestDist = dist;
+              hitType = type;
+              hitIndex = i;
+            }
+          });
+        };
+        
+        checkPoints(latestProps.current.targetPoints, 'target');
+        checkPoints(latestProps.current.baselinePoints, 'baseline');
+        
+        if (hitType !== dragState.current.hoveredType || hitIndex !== dragState.current.hoveredIndex) {
+          dragState.current.hoveredType = hitType;
+          dragState.current.hoveredIndex = hitIndex;
+        }
+        
+        canvas.style.cursor = hitType ? 'grab' : 'default';
+        if (dragState.current.isDragging) canvas.style.cursor = 'grabbing';
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (dragState.current.isDragging) {
+        dragState.current.isDragging = false;
+        const { type } = dragState.current;
+        dragState.current.type = null;
+        dragState.current.index = -1;
+        
+        // Sort points by X on release to maintain valid line graph
+        const sortPts = (pts: {x:number, y:number}[], onChange: (p: {x:number, y:number}[]) => void) => {
+          const sorted = [...pts].sort((a, b) => a.x - b.x);
+          onChange(sorted);
+        };
+        
+        if (type === 'target' && latestProps.current.onTargetPointsChange) {
+          sortPts(latestProps.current.targetPoints, latestProps.current.onTargetPointsChange);
+        } else if (type === 'baseline' && latestProps.current.onBaselinePointsChange) {
+          sortPts(latestProps.current.baselinePoints, latestProps.current.onBaselinePointsChange);
+        }
+      }
+    };
+
+    canvas.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      canvas.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -380,31 +549,61 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       ctx.fill();
     };
 
+    const drawEditorPoints = (pts: {x:number, y:number}[], color: string, type: 'target' | 'baseline') => {
+      if (!ctx) return;
+      pts.forEach((p, i) => {
+        const cx = padding + p.x * (width - padding * 2);
+        const cy = height - padding - p.y * (height - padding * 2);
+        
+        ctx.beginPath();
+        ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+        
+        if (dragState.current.hoveredType === type && dragState.current.hoveredIndex === i) {
+          ctx.beginPath();
+          ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+          ctx.strokeStyle = '#fff';
+          ctx.stroke();
+        }
+      });
+    };
+
     const render = (time: number) => {
       const state = stateRef.current;
       
-      if (state.isPlaying) {
-        const dt = (time - state.lastTime) / 1000;
-        state.lastTime = time;
-        
-        if (state.progress < 1) {
-          state.progress = Math.min(state.progress + dt / duration, 1);
-        } else if (state.fillProgress < 1) {
-          state.fillProgress = Math.min(state.fillProgress + dt / 1.5, 1); // 1.5s fill animation
-        } else if (state.isRecording) {
-          // Finish recording
-          state.isRecording = false;
-          state.isPlaying = false;
-          if (state.recorder && state.recorder.state !== 'inactive') {
-            // Add a small delay before stopping to ensure last frame is captured
-            setTimeout(() => {
-              state.recorder?.stop();
-            }, 100);
-          }
-          onPlayStateChange(false);
-        }
+      if (isEditorMode) {
+        state.progress = 1;
+        state.fillProgress = 1;
+        state.isPlaying = false;
+        if (onTimeUpdate) onTimeUpdate(duration);
       } else {
-        state.lastTime = time; // keep lastTime updated while paused
+        if (state.isPlaying) {
+          const dt = (time - state.lastTime) / 1000;
+          state.lastTime = time;
+          
+          if (state.progress < 1) {
+            state.progress = Math.min(state.progress + dt / duration, 1);
+          } else if (state.fillProgress < 1) {
+            state.fillProgress = Math.min(state.fillProgress + dt / 1.5, 1); // 1.5s fill animation
+          } else if (state.isRecording) {
+            // Finish recording
+            state.isRecording = false;
+            state.isPlaying = false;
+            if (state.recorder && state.recorder.state !== 'inactive') {
+              setTimeout(() => {
+                state.recorder?.stop();
+              }, 100);
+            }
+            onPlayStateChange(false);
+          }
+        } else {
+          state.lastTime = time;
+        }
+        if (onTimeUpdate) onTimeUpdate(state.progress * duration);
       }
 
       drawBackground();
@@ -431,7 +630,6 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
         blueProg = easeInOutCubic(state.progress);
       }
 
-      // Draw fill first so it's behind lines
       if (state.progress >= 1 && (mode === 'together' || mode === 'separate')) {
         drawFill(easeInOutCubic(state.fillProgress));
       }
@@ -439,7 +637,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       const orangePos = drawLine(orangePts, orangeData.lengths, orangeData.total, orangeProg, line1Color);
       const bluePos = drawLine(bluePts, blueData.lengths, blueData.total, blueProg, line2Color);
 
-      if (state.isPlaying) {
+      if (state.isPlaying && !isEditorMode) {
         if (orangePos && orangeProg < 1) spawnParticles(orangePos, particleColor1);
         if (bluePos && blueProg < 1) spawnParticles(bluePos, particleColor2);
       }
@@ -447,7 +645,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       // Update and draw particles
       for (let i = state.particles.length - 1; i >= 0; i--) {
         let p = state.particles[i];
-        if (state.isPlaying) {
+        if (state.isPlaying && !isEditorMode) {
           p.x += p.vx;
           p.y += p.vy;
           p.life -= 0.02;
@@ -461,7 +659,6 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
           ctx.globalAlpha = p.life;
           ctx.fill();
           
-          // Add a soft glow layer for particle
           ctx.beginPath();
           ctx.arc(p.x, p.y, particleSize * 3 * p.life, 0, Math.PI * 2);
           ctx.fillStyle = p.color;
@@ -470,6 +667,11 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
           
           ctx.globalAlpha = 1;
         }
+      }
+
+      if (isEditorMode) {
+        drawEditorPoints(baselinePoints, line2Color, 'baseline');
+        drawEditorPoints(targetPoints, line1Color, 'target');
       }
 
       animationFrameId = requestAnimationFrame(render);
@@ -485,7 +687,8 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
     duration, mode, backgroundColor, showGrid, showBloom, backgroundImage,
     lineWidth, pointRadius, line1Color, line2Color,
     particleSize, particleColor1, particleColor2, particleEmissionRate,
-    targetPoints, baselinePoints, targetResolution.w, targetResolution.h
+    targetPoints, baselinePoints, targetResolution.w, targetResolution.h,
+    isEditorMode
   ]);
 
   return (

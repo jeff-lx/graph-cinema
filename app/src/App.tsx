@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Play, Pause, RotateCcw, Download, Video, Film, Grid, Settings2, Image as ImageIcon, Trash2, Upload, RefreshCw, Save, Activity, Monitor } from 'lucide-react';
+import { Play, Pause, RotateCcw, Download, Video, Film, Grid, Settings2, Image as ImageIcon, Trash2, Upload, RefreshCw, Save, Activity, Monitor, Edit3, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Clock } from 'lucide-react';
 import AnimationCanvas, { AnimationCanvasRef } from './components/AnimationCanvas';
 
 const DEFAULT_SETTINGS = {
@@ -37,6 +37,10 @@ export default function App() {
   
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isEditorMode, setIsEditorMode] = useState(false);
+  const [showLeftSidebar, setShowLeftSidebar] = useState(true);
+  const [showRightSidebar, setShowRightSidebar] = useState(true);
   
   // Settings State
   const [duration, setDuration] = useState(DEFAULT_SETTINGS.duration);
@@ -58,6 +62,7 @@ export default function App() {
   const [baselinePoints, setBaselinePoints] = useState(DEFAULT_SETTINGS.baselinePoints);
 
   const handlePlayPause = () => {
+    if (isEditorMode) setIsEditorMode(false);
     if (isPlaying) {
       canvasRef.current?.pause();
       setIsPlaying(false);
@@ -68,11 +73,13 @@ export default function App() {
   };
 
   const handleRestart = () => {
+    if (isEditorMode) setIsEditorMode(false);
     canvasRef.current?.restart();
     setIsPlaying(true);
   };
 
-  const handleExport = (format: 'webm' | 'mp4' | 'webm-transparent') => {
+  const handleExport = (format: 'webm' | 'mp4') => {
+    if (isEditorMode) setIsEditorMode(false);
     setIsRecording(true);
     canvasRef.current?.exportVideo(format, () => {
       setIsRecording(false);
@@ -194,20 +201,49 @@ export default function App() {
             <span className="text-xs text-zinc-400 w-8 shrink-0">{duration}s</span>
             <input type="range" min="2" max="30" step="1" value={duration} onChange={(e) => setDuration(Number(e.target.value))} disabled={isRecording} className="flex-1 accent-orange-500" />
           </div>
+
+          <div className="h-6 w-px bg-white/10"></div>
+
+          <div className="flex items-center gap-2 text-zinc-400 font-mono text-sm w-16 justify-center">
+            <Clock className="w-4 h-4" />
+            <span>{currentTime.toFixed(1)}s</span>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
+          <button 
+            onClick={() => {
+              setIsEditorMode(!isEditorMode);
+              if (!isEditorMode && isPlaying) {
+                canvasRef.current?.pause();
+                setIsPlaying(false);
+              }
+            }} 
+            disabled={isRecording}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50 border ${isEditorMode ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-white/5'}`}
+          >
+            <Edit3 className="w-4 h-4" />
+            Editor
+          </button>
+          <div className="h-6 w-px bg-white/10 mx-1"></div>
           <ExportButton icon={<Video className="w-4 h-4" />} label="WebM" onClick={() => handleExport('webm')} disabled={isRecording} />
           <ExportButton icon={<Film className="w-4 h-4" />} label="MP4" onClick={() => handleExport('mp4')} disabled={isRecording} />
-          <ExportButton icon={<Download className="w-4 h-4" />} label="Transparent" onClick={() => handleExport('webm-transparent')} disabled={isRecording} />
         </div>
       </header>
 
       {/* Main Layout */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         
+        {/* Left Sidebar Toggle */}
+        <button 
+          onClick={() => setShowLeftSidebar(!showLeftSidebar)}
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1 rounded-r-md border border-l-0 border-white/10 shadow-lg transition-colors"
+        >
+          {showLeftSidebar ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
+        </button>
+
         {/* Left Sidebar - Settings */}
-        <aside className="w-80 border-r border-white/10 bg-zinc-900/30 overflow-y-auto p-5 space-y-8 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
+        <aside className={`w-80 shrink-0 border-r border-white/10 bg-zinc-900/30 overflow-y-auto p-5 space-y-8 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent transition-all duration-300 ${showLeftSidebar ? 'ml-0' : '-ml-80'}`}>
           
           {/* Resolution */}
           <div className="space-y-3">
@@ -363,6 +399,10 @@ export default function App() {
               targetPoints={targetPoints}
               baselinePoints={baselinePoints}
               targetResolution={resolution}
+              isEditorMode={isEditorMode}
+              onTargetPointsChange={setTargetPoints}
+              onBaselinePointsChange={setBaselinePoints}
+              onTimeUpdate={setCurrentTime}
               onPlayStateChange={setIsPlaying}
             />
 
@@ -376,8 +416,16 @@ export default function App() {
           </div>
         </main>
 
+        {/* Right Sidebar Toggle */}
+        <button 
+          onClick={() => setShowRightSidebar(!showRightSidebar)}
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1 rounded-l-md border border-r-0 border-white/10 shadow-lg transition-colors"
+        >
+          {showRightSidebar ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
+        </button>
+
         {/* Right Sidebar - Data Points */}
-        <aside className="w-[420px] border-l border-white/10 bg-zinc-900/30 overflow-hidden flex flex-col">
+        <aside className={`w-[420px] shrink-0 border-l border-white/10 bg-zinc-900/30 overflow-hidden flex flex-col transition-all duration-300 ${showRightSidebar ? 'mr-0' : '-mr-[420px]'}`}>
           <div className="p-4 border-b border-white/5 shrink-0">
             <h3 className="text-sm font-medium text-white">Data Points</h3>
             <p className="text-xs text-zinc-500 mt-1">Values from 0.0 to 1.0</p>
