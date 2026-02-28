@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Play, Pause, RotateCcw, Download, Video, Film, Grid, Settings2, Image as ImageIcon, Trash2, Upload, RefreshCw, Save, Activity, Monitor, Edit3, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Clock, Eye, EyeOff, FolderOpen } from 'lucide-react';
+import { Play, Pause, Square, RotateCcw, Download, Video, Film, Grid, Settings2, Image as ImageIcon, Trash2, Upload, RefreshCw, Save, Activity, Monitor, Edit3, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Clock, Eye, EyeOff, FolderOpen } from 'lucide-react';
 import AnimationCanvas, { AnimationCanvasRef } from './components/AnimationCanvas';
 
 const DEFAULT_SETTINGS = {
@@ -66,6 +66,51 @@ export default function App() {
   // Save System State
   const [savedGraphs, setSavedGraphs] = useState<{id: string, name: string, settings: any}[]>([]);
   const [currentGraphId, setCurrentGraphId] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Prompt State
+  const [promptConfig, setPromptConfig] = useState<{isOpen: boolean, title: string, value: string, onConfirm: (val: string) => void} | null>(null);
+
+  // UI State
+  const [mouseNearLeft, setMouseNearLeft] = useState(false);
+  const [mouseNearRight, setMouseNearRight] = useState(false);
+  const [isScrolling, setIsScrolling] = useState(false);
+  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
+  const mainLayoutRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isScrolling) {
+        setMouseNearLeft(false);
+        setMouseNearRight(false);
+        return;
+      }
+      if (!mainLayoutRef.current) return;
+      const rect = mainLayoutRef.current.getBoundingClientRect();
+      
+      setMouseNearLeft(Math.abs(e.clientX - rect.left) < 60);
+      setMouseNearRight(Math.abs(e.clientX - rect.right) < 60);
+    };
+
+    const handleScroll = () => {
+      setIsScrolling(true);
+      setMouseNearLeft(false);
+      setMouseNearRight(false);
+      if (scrollTimeout.current) clearTimeout(scrollTimeout.current);
+      scrollTimeout.current = setTimeout(() => {
+        setIsScrolling(false);
+      }, 500);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('scroll', handleScroll, true);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [isScrolling]);
 
   useEffect(() => {
     const saved = localStorage.getItem('graphCinemaSavedGraphs');
@@ -89,6 +134,25 @@ export default function App() {
     particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline
   });
 
+  useEffect(() => {
+    if (currentGraphId) {
+      const graph = savedGraphs.find(g => g.id === currentGraphId);
+      if (graph) {
+        const current = getCurrentSettings();
+        setHasUnsavedChanges(JSON.stringify(current) !== JSON.stringify(graph.settings));
+      } else {
+        setHasUnsavedChanges(false);
+      }
+    } else {
+      setHasUnsavedChanges(false);
+    }
+  }, [
+    duration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, pointRadius,
+    line1Color, line2Color, particleSize, particleColor1, particleColor2,
+    particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline,
+    currentGraphId, savedGraphs
+  ]);
+
   const loadSettings = (s: any) => {
     if (s.duration !== undefined) setDuration(s.duration);
     if (s.mode !== undefined) setMode(s.mode === 'separate' ? 'staggered' : s.mode);
@@ -110,22 +174,31 @@ export default function App() {
     if (s.showBaseline !== undefined) setShowBaseline(s.showBaseline);
   };
 
+  const openPrompt = (title: string, defaultValue: string, onConfirm: (val: string) => void) => {
+    setPromptConfig({ isOpen: true, title, value: defaultValue, onConfirm });
+  };
+
   const handleSaveGraph = () => {
     if (currentGraphId) {
       const updated = savedGraphs.map(g => g.id === currentGraphId ? { ...g, settings: getCurrentSettings() } : g);
       saveToLocalStorage(updated);
+      setIsSaving(true);
+      setTimeout(() => setIsSaving(false), 1500);
     } else {
       handleSaveGraphAs();
     }
   };
 
   const handleSaveGraphAs = () => {
-    const name = window.prompt("Enter a name for this graph:");
-    if (name) {
-      const newGraph = { id: Date.now().toString(), name, settings: getCurrentSettings() };
-      saveToLocalStorage([...savedGraphs, newGraph]);
-      setCurrentGraphId(newGraph.id);
-    }
+    openPrompt("Enter a name for this graph:", "My Graph", (name) => {
+      if (name) {
+        const newGraph = { id: Date.now().toString(), name, settings: getCurrentSettings() };
+        saveToLocalStorage([...savedGraphs, newGraph]);
+        setCurrentGraphId(newGraph.id);
+        setIsSaving(true);
+        setTimeout(() => setIsSaving(false), 1500);
+      }
+    });
   };
 
   const handleLoadGraph = (id: string) => {
@@ -153,10 +226,20 @@ export default function App() {
     if (!currentGraphId) return;
     const graph = savedGraphs.find(g => g.id === currentGraphId);
     if (!graph) return;
-    const newName = window.prompt("Enter new name:", graph.name);
-    if (newName && newName !== graph.name) {
-      const updated = savedGraphs.map(g => g.id === currentGraphId ? { ...g, name: newName } : g);
-      saveToLocalStorage(updated);
+    openPrompt("Enter new name:", graph.name, (newName) => {
+      if (newName && newName !== graph.name) {
+        const updated = savedGraphs.map(g => g.id === currentGraphId ? { ...g, name: newName } : g);
+        saveToLocalStorage(updated);
+      }
+    });
+  };
+
+  const handleDiscardChanges = () => {
+    if (currentGraphId) {
+      const graph = savedGraphs.find(g => g.id === currentGraphId);
+      if (graph) {
+        loadSettings(graph.settings);
+      }
     }
   };
 
@@ -175,6 +258,12 @@ export default function App() {
     if (isEditorMode) setIsEditorMode(false);
     canvasRef.current?.restart();
     setIsPlaying(true);
+  };
+
+  const handleStop = () => {
+    if (isEditorMode) setIsEditorMode(false);
+    canvasRef.current?.stop();
+    setIsPlaying(false);
   };
 
   const handleExport = (format: 'webm' | 'mp4') => {
@@ -275,13 +364,16 @@ export default function App() {
           <span className="text-lg font-bold text-white tracking-wide">Graph Cinema</span>
         </div>
 
-        <div className="flex items-center gap-6 flex-1 justify-center max-w-3xl">
-          <div className="flex items-center gap-2">
-            <button onClick={handlePlayPause} disabled={isRecording} className="w-10 h-10 flex items-center justify-center bg-white text-black rounded-full hover:bg-zinc-200 transition-colors disabled:opacity-50 shrink-0">
-              {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-1" />}
+        <div className="flex items-center gap-6 flex-1 justify-center max-w-4xl">
+          <div className="flex items-center gap-1 bg-zinc-800/50 p-1 rounded-full border border-white/5">
+            <button onClick={handlePlayPause} disabled={isRecording} className="w-8 h-8 flex items-center justify-center bg-white text-black rounded-full hover:bg-zinc-200 transition-colors disabled:opacity-50 shrink-0">
+              {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
             </button>
-            <button onClick={handleRestart} disabled={isRecording} className="w-10 h-10 flex items-center justify-center bg-zinc-800 text-white rounded-full hover:bg-zinc-700 transition-colors disabled:opacity-50 shrink-0">
-              <RotateCcw className="w-4 h-4" />
+            <button onClick={handleStop} disabled={isRecording} className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-full transition-colors disabled:opacity-50 shrink-0">
+              <Square className="w-3.5 h-3.5 fill-current" />
+            </button>
+            <button onClick={handleRestart} disabled={isRecording} className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-full transition-colors disabled:opacity-50 shrink-0">
+              <RotateCcw className="w-3.5 h-3.5" />
             </button>
           </div>
 
@@ -294,16 +386,27 @@ export default function App() {
 
           <div className="h-6 w-px bg-white/10"></div>
 
-          <div className="flex items-center gap-3 flex-1 max-w-[200px]">
-            <span className="text-xs text-zinc-400 w-8 shrink-0">{duration}s</span>
-            <input type="range" min="2" max="30" step="1" value={duration} onChange={(e) => setDuration(Number(e.target.value))} disabled={isRecording} className="flex-1 accent-orange-500" />
-          </div>
-
-          <div className="h-6 w-px bg-white/10"></div>
-
-          <div className="flex items-center gap-2 text-zinc-400 font-mono text-sm w-16 justify-center">
-            <Clock className="w-4 h-4" />
-            <span>{currentTime.toFixed(1)}s</span>
+          <div className="flex items-center gap-3 flex-1 max-w-[300px]">
+            <span className="text-xs text-zinc-400 font-mono w-10 text-right">{currentTime.toFixed(1)}s</span>
+            <input 
+              type="range" 
+              min="0" 
+              max={duration + 1.5} 
+              step="0.01" 
+              value={currentTime} 
+              onChange={(e) => {
+                const t = Number(e.target.value);
+                setCurrentTime(t);
+                canvasRef.current?.seek(t);
+                if (isPlaying) {
+                  canvasRef.current?.pause();
+                  setIsPlaying(false);
+                }
+              }} 
+              disabled={isRecording} 
+              className="flex-1 accent-orange-500 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer" 
+            />
+            <span className="text-xs text-zinc-500 font-mono w-10">{(duration + 1.5).toFixed(1)}s</span>
           </div>
         </div>
 
@@ -329,18 +432,29 @@ export default function App() {
       </header>
 
       {/* Main Layout */}
-      <div className="flex-1 flex overflow-hidden relative group/layout">
+      <div ref={mainLayoutRef} className="flex-1 flex overflow-hidden relative group/layout">
         
         {/* Left Sidebar Toggle */}
         <button 
           onClick={() => setShowLeftSidebar(!showLeftSidebar)}
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1 rounded-r-md border border-l-0 border-white/10 shadow-lg transition-all opacity-0 group-hover/layout:opacity-100"
+          className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1.5 rounded-r-md border border-l-0 border-white/10 shadow-lg transition-all duration-300 ${mouseNearLeft && !isScrolling ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         >
           {showLeftSidebar ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
         </button>
 
         {/* Left Sidebar - Settings */}
         <aside className={`w-80 shrink-0 border-r border-white/10 bg-zinc-900/30 overflow-y-auto p-5 space-y-8 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent transition-all duration-300 ${showLeftSidebar ? 'ml-0' : '-ml-80'}`}>
+          
+          {/* Animation Settings */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-white flex items-center gap-2"><Clock className="w-4 h-4"/> Animation</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-zinc-400"><span>Duration</span><span>{duration}s</span></div>
+              <input type="range" min="2" max="30" step="1" value={duration} onChange={(e) => setDuration(Number(e.target.value))} disabled={isRecording} className="w-full accent-orange-500" />
+            </div>
+          </div>
+
+          <div className="h-px bg-white/5"></div>
           
           {/* Resolution */}
           <div className="space-y-3">
@@ -465,13 +579,19 @@ export default function App() {
               </select>
               
               <div className="grid grid-cols-2 gap-2">
-                <button onClick={handleSaveGraph} className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 text-xs rounded transition-colors border border-orange-500/30">
-                  <Save className="w-3.5 h-3.5" /> Save
+                <button onClick={handleSaveGraph} className={`flex items-center justify-center gap-1.5 w-full px-2 py-1.5 text-xs rounded transition-all border ${isSaving ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border-orange-500/30'}`}>
+                  <Save className="w-3.5 h-3.5" /> {isSaving ? 'Saved!' : 'Save'}
                 </button>
                 <button onClick={handleSaveGraphAs} className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs rounded transition-colors border border-white/5">
                   Save As
                 </button>
               </div>
+              
+              {hasUnsavedChanges && (
+                <button onClick={handleDiscardChanges} className="flex items-center justify-center gap-1.5 w-full px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs rounded transition-colors border border-white/5 mt-2">
+                  <RotateCcw className="w-3.5 h-3.5" /> Discard Changes
+                </button>
+              )}
               
               {currentGraphId && (
                 <div className="grid grid-cols-2 gap-2 pt-1">
@@ -555,7 +675,7 @@ export default function App() {
         {/* Right Sidebar Toggle */}
         <button 
           onClick={() => setShowRightSidebar(!showRightSidebar)}
-          className="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1 rounded-l-md border border-r-0 border-white/10 shadow-lg transition-all opacity-0 group-hover/layout:opacity-100"
+          className={`absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white p-1.5 rounded-l-md border border-r-0 border-white/10 shadow-lg transition-all duration-300 ${mouseNearRight && !isScrolling ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         >
           {showRightSidebar ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
         </button>
@@ -577,6 +697,47 @@ export default function App() {
         </aside>
 
       </div>
+
+      {/* Prompt Modal */}
+      {promptConfig?.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-white/10 rounded-lg p-6 w-80 shadow-2xl">
+            <h3 className="text-lg font-medium text-white mb-4">{promptConfig.title}</h3>
+            <input 
+              type="text" 
+              value={promptConfig.value}
+              onChange={e => setPromptConfig({...promptConfig, value: e.target.value})}
+              className="w-full bg-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 border border-white/10 focus:border-orange-500/50 outline-none mb-6"
+              autoFocus
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  promptConfig.onConfirm(promptConfig.value);
+                  setPromptConfig(null);
+                } else if (e.key === 'Escape') {
+                  setPromptConfig(null);
+                }
+              }}
+            />
+            <div className="flex justify-end gap-2">
+              <button 
+                onClick={() => setPromptConfig(null)}
+                className="px-4 py-2 rounded text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  promptConfig.onConfirm(promptConfig.value);
+                  setPromptConfig(null);
+                }}
+                className="px-4 py-2 rounded text-sm font-medium bg-orange-500 text-white hover:bg-orange-600 transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

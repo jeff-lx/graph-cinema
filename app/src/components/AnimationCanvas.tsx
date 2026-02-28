@@ -3,7 +3,9 @@ import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react
 export interface AnimationCanvasRef {
   play: () => void;
   pause: () => void;
+  stop: () => void;
   restart: () => void;
+  seek: (time: number) => void;
   exportVideo: (format: 'webm' | 'mp4' | 'webm-transparent', onComplete: () => void) => void;
 }
 
@@ -140,6 +142,25 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
     pause: () => {
       stateRef.current.isPlaying = false;
       onPlayStateChange(false);
+    },
+    stop: () => {
+      stateRef.current.progress = 0;
+      stateRef.current.fillProgress = 0;
+      stateRef.current.particles = [];
+      stateRef.current.isPlaying = false;
+      onPlayStateChange(false);
+      if (onTimeUpdate) onTimeUpdate(0);
+    },
+    seek: (time: number) => {
+      if (time <= duration) {
+        stateRef.current.progress = time / duration;
+        stateRef.current.fillProgress = 0;
+      } else {
+        stateRef.current.progress = 1;
+        stateRef.current.fillProgress = Math.min(1, (time - duration) / 1.5);
+      }
+      stateRef.current.particles = [];
+      if (onTimeUpdate) onTimeUpdate(time);
     },
     restart: () => {
       stateRef.current.progress = 0;
@@ -605,7 +626,9 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
         } else {
           state.lastTime = time;
         }
-        if (onTimeUpdate) onTimeUpdate(state.progress * duration);
+        if (onTimeUpdate) {
+          onTimeUpdate(state.progress * duration + state.fillProgress * 1.5);
+        }
       }
 
       drawBackground();
