@@ -1,0 +1,5 @@
+{
+  "name": "Cinematic Graph Animator",
+  "description": "A modern web-based animation tool that visualizes a line graph as a cinematic animated experience with neon glow effects and video export.",
+  "requestFramePermissions": []
+}
