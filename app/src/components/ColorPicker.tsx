@@ -104,12 +104,19 @@ export default function ColorPicker({ value, onChange, label, align = 'left' }: 
           </div>
 
           {!isGradient ? (
-            <div className="space-y-2">
+            <div className="flex gap-2">
               <input
                 type="color"
+                value={value.color.slice(0, 7)}
+                onChange={e => handleSolidColorChange(e.target.value)}
+                className="w-8 h-8 cursor-pointer rounded bg-transparent shrink-0"
+              />
+              <input
+                type="text"
                 value={value.color}
                 onChange={e => handleSolidColorChange(e.target.value)}
-                className="w-full h-8 cursor-pointer rounded bg-transparent"
+                className="flex-1 bg-zinc-800 border border-white/10 rounded px-2 text-xs text-zinc-300 focus:outline-none focus:border-zinc-500"
+                placeholder="#FFFFFF"
               />
             </div>
           ) : (
@@ -117,12 +124,18 @@ export default function ColorPicker({ value, onChange, label, align = 'left' }: 
               <div className="h-4 rounded border border-white/10 w-full" style={getPreviewStyle()}></div>
               <div className="space-y-2 max-h-40 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
                 {value.stops.map((stop, i) => (
-                  <div key={i} className="flex items-center gap-2 bg-zinc-800/50 p-1.5 rounded border border-white/5">
+                  <div key={i} className="flex items-center gap-1.5 bg-zinc-800/50 p-1.5 rounded border border-white/5">
                     <input
                       type="color"
-                      value={stop.color}
+                      value={stop.color.slice(0, 7)}
                       onChange={e => handleGradientStopChange(i, { ...stop, color: e.target.value })}
                       className="w-6 h-6 cursor-pointer rounded bg-transparent shrink-0"
+                    />
+                    <input
+                      type="text"
+                      value={stop.color}
+                      onChange={e => handleGradientStopChange(i, { ...stop, color: e.target.value })}
+                      className="w-16 bg-zinc-800 border border-white/10 rounded px-1 py-0.5 text-[10px] text-zinc-300 focus:outline-none focus:border-zinc-500"
                     />
                     <input
                       type="range"
@@ -131,12 +144,12 @@ export default function ColorPicker({ value, onChange, label, align = 'left' }: 
                       step="0.01"
                       value={stop.offset}
                       onChange={e => handleGradientStopChange(i, { ...stop, offset: parseFloat(e.target.value) })}
-                      className="flex-1 accent-orange-500"
+                      className="flex-1 w-12 accent-orange-500"
                     />
                     <button
                       onClick={() => removeGradientStop(i)}
                       disabled={value.stops.length <= 2}
-                      className="p-1 text-zinc-500 hover:text-red-400 disabled:opacity-30 transition-colors"
+                      className="p-1 text-zinc-500 hover:text-red-400 disabled:opacity-30 transition-colors shrink-0"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

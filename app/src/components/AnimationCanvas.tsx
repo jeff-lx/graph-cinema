@@ -20,11 +20,13 @@ interface Props {
   showBloom: boolean;
   backgroundImage: string | null;
   lineWidth: number;
-  lineStyle: 'solid' | 'dotted';
+  lineStyle: 'solid' | 'dotted' | 'shape';
+  lineShape: 'circle' | 'triangle' | 'square' | 'star' | 'diamond' | 'hex';
   lineDashLength: number;
   showOutline: boolean;
   outlineWidth: number;
-  outlineStyle: 'solid' | 'dotted';
+  outlineStyle: 'solid' | 'dotted' | 'shape';
+  outlineShape: 'circle' | 'triangle' | 'square' | 'star' | 'diamond' | 'hex';
   outlineDashLength: number;
   outline1Color: ColorValue;
   outline2Color: ColorValue;
@@ -36,6 +38,7 @@ interface Props {
   line2Color: ColorValue;
   lineCap: 'round' | 'butt' | 'square';
   outlineCap: 'round' | 'butt' | 'square';
+  showParticles: boolean;
   particleSize: number;
   particleColor1: ColorValue;
   particleColor2: ColorValue;
@@ -159,8 +162,8 @@ const hexToRgb = (hex: string) => {
 
 const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({ 
   duration, revealDuration, mode, backgroundColor, showGrid, showBloom, backgroundImage,
-  lineWidth, lineStyle, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier, line1Color, line2Color, lineCap, outlineCap,
-  particleSize, particleColor1, particleColor2, particleShape, particleEmissionRate,
+  lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier, line1Color, line2Color, lineCap, outlineCap,
+  showParticles, particleSize, particleColor1, particleColor2, particleShape, particleEmissionRate,
   targetPoints, baselinePoints, showTarget, showBaseline, targetResolution,
   isEditorMode, onTargetPointsChange, onBaselinePointsChange, onTimeUpdate,
   onPlayStateChange 
@@ -404,7 +407,10 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       if (dragState.current.isDragging) {
         const { type, index } = dragState.current;
         const pts = type === 'target' ? [...latestProps.current.targetPoints] : [...latestProps.current.baselinePoints];
-        pts[index] = { x: coords.normX, y: coords.normY };
+        pts[index] = { 
+          x: Math.round(coords.normX * 100) / 100, 
+          y: Math.round(coords.normY * 100) / 100 
+        };
         
         if (type === 'target' && latestProps.current.onTargetPointsChange) {
           latestProps.current.onTargetPointsChange(pts);
@@ -707,6 +713,9 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
         ctx.lineTo(x + s, y + s);
         ctx.lineTo(x - s, y + s);
         ctx.closePath();
+      } else if (shape === 'square') {
+        const s = size * 1.5;
+        ctx.rect(x - s, y - s, s * 2, s * 2);
       } else if (shape === 'star') {
         const s = size * 1.5;
         for (let j = 0; j < 5; j++) {
@@ -737,8 +746,51 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       }
     };
 
-    const drawOutline = (pts: {x:number, y:number}[], colorValue: ColorValue) => {
+    const getPointAtDistance = (pts: {x:number, y:number}[], lengths: number[], dist: number) => {
+      if (dist <= 0) return pts[0];
+      if (dist >= lengths[lengths.length - 1]) return pts[pts.length - 1];
+      
+      let low = 0;
+      let high = lengths.length - 1;
+      while (low <= high) {
+        let mid = Math.floor((low + high) / 2);
+        if (lengths[mid] < dist) {
+          low = mid + 1;
+        } else if (lengths[mid] > dist) {
+          high = mid - 1;
+        } else {
+          return pts[mid];
+        }
+      }
+      
+      let idx = low;
+      let p1 = pts[idx - 1];
+      let p2 = pts[idx];
+      let l1 = lengths[idx - 1];
+      let l2 = lengths[idx];
+      let t = (dist - l1) / (l2 - l1);
+      return {
+        x: p1.x + (p2.x - p1.x) * t,
+        y: p1.y + (p2.y - p1.y) * t
+      };
+    };
+
+    const drawOutline = (pts: {x:number, y:number}[], lengths: number[], totalLength: number, colorValue: ColorValue) => {
       if (!ctx || pts.length === 0) return;
+
+      if (outlineStyle === 'shape') {
+        ctx.fillStyle = getCanvasColor(colorValue);
+        let dist = 0;
+        while (dist <= totalLength) {
+          let p = getPointAtDistance(pts, lengths, dist);
+          ctx.beginPath();
+          drawShape(ctx, p.x, p.y, outlineWidth / 2, outlineShape);
+          ctx.fill();
+          dist += outlineDashLength;
+        }
+        return;
+      }
+
       ctx.beginPath();
       ctx.moveTo(pts[0].x, pts[0].y);
       for (let i = 1; i < pts.length; i++) {
@@ -765,12 +817,6 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
         endIdx++;
       }
 
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < endIdx; i++) {
-        ctx.lineTo(pts[i].x, pts[i].y);
-      }
-
       let currentPos = pts[endIdx - 1];
       if (endIdx < pts.length) {
         const p1 = pts[endIdx - 1];
@@ -782,36 +828,69 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
           x: p1.x + (p2.x - p1.x) * t,
           y: p1.y + (p2.y - p1.y) * t
         };
-        ctx.lineTo(currentPos.x, currentPos.y);
       }
 
-      ctx.lineCap = lineCap;
-      ctx.lineJoin = 'round';
-      
-      if (lineStyle === 'dotted') {
-        ctx.setLineDash([lineDashLength, lineDashLength]);
+      if (lineStyle === 'shape') {
+        let dist = 0;
+        ctx.save();
+        while (dist <= targetLen) {
+          let p = getPointAtDistance(pts, lengths, dist);
+          
+          ctx.shadowBlur = lineWidth * 4;
+          ctx.shadowColor = getCanvasColor(colorValue);
+          ctx.fillStyle = getCanvasColor(colorValue);
+          
+          ctx.beginPath();
+          drawShape(ctx, p.x, p.y, lineWidth / 2, lineShape);
+          ctx.fill();
+          
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          drawShape(ctx, p.x, p.y, lineWidth / 4, lineShape);
+          ctx.fill();
+          
+          dist += lineDashLength;
+        }
+        ctx.restore();
       } else {
-        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < endIdx; i++) {
+          ctx.lineTo(pts[i].x, pts[i].y);
+        }
+        if (endIdx < pts.length) {
+          ctx.lineTo(currentPos.x, currentPos.y);
+        }
+
+        ctx.lineCap = lineCap;
+        ctx.lineJoin = 'round';
+        
+        if (lineStyle === 'dotted') {
+          ctx.setLineDash([lineDashLength, lineDashLength]);
+        } else {
+          ctx.setLineDash([]);
+        }
+
+        // Glow effect using filter for perfect smooth gradients
+        ctx.save();
+        ctx.filter = `blur(${lineWidth * 4}px)`;
+        ctx.strokeStyle = getCanvasColor(colorValue);
+        ctx.lineWidth = lineWidth * 4;
+        ctx.stroke();
+        
+        ctx.filter = `blur(${lineWidth * 8}px)`;
+        ctx.lineWidth = lineWidth * 8;
+        ctx.stroke();
+        ctx.restore();
+        
+        // Core line
+        ctx.lineWidth = lineWidth;
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+
+        ctx.setLineDash([]); // Reset dash
       }
-
-      // Glow effect using filter for perfect smooth gradients
-      ctx.save();
-      ctx.filter = `blur(${lineWidth * 4}px)`;
-      ctx.strokeStyle = getCanvasColor(colorValue);
-      ctx.lineWidth = lineWidth * 4;
-      ctx.stroke();
-      
-      ctx.filter = `blur(${lineWidth * 8}px)`;
-      ctx.lineWidth = lineWidth * 8;
-      ctx.stroke();
-      ctx.restore();
-      
-      // Core line
-      ctx.lineWidth = lineWidth;
-      ctx.strokeStyle = '#fff';
-      ctx.stroke();
-
-      ctx.setLineDash([]); // Reset dash
 
       if (pointRadius > 0) {
         // Draw head glow
@@ -926,8 +1005,8 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       drawBackground();
 
       if (showOutline) {
-        if (showTarget) drawOutline(orangePts, outline1Color);
-        if (showBaseline) drawOutline(bluePts, outline2Color);
+        if (showTarget) drawOutline(orangePts, orangeData.lengths, orangeData.total, outline1Color);
+        if (showBaseline) drawOutline(bluePts, blueData.lengths, blueData.total, outline2Color);
       }
 
       let orangeProg = 0;
@@ -961,70 +1040,72 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       const orangePos = showTarget ? drawLine(orangePts, orangeData.lengths, orangeData.total, orangeProg, line1Color) : null;
       const bluePos = showBaseline ? drawLine(bluePts, blueData.lengths, blueData.total, blueProg, line2Color) : null;
 
-      if (state.isPlaying && !isEditorMode) {
+      if (state.isPlaying && !isEditorMode && showParticles) {
         if (orangePos && orangeProg < 1) spawnParticles(orangePos, particleColor1);
         if (bluePos && blueProg < 1) spawnParticles(bluePos, particleColor2);
       }
 
       // Update and draw particles
-      for (let i = state.particles.length - 1; i >= 0; i--) {
-        let p = state.particles[i];
-        if (state.isPlaying && !isEditorMode) {
-          p.x += p.vx;
-          p.y += p.vy;
-          p.life -= 0.02;
-        }
-        if (p.life <= 0) {
-          state.particles.splice(i, 1);
-        } else if (ctx) {
-          ctx.beginPath();
-          if (particleShape === 'circle') {
-            ctx.arc(p.x, p.y, particleSize * p.life, 0, Math.PI * 2);
-          } else if (particleShape === 'triangle') {
-            const s = particleSize * p.life * 1.5;
-            ctx.moveTo(p.x, p.y - s);
-            ctx.lineTo(p.x + s, p.y + s);
-            ctx.lineTo(p.x - s, p.y + s);
-            ctx.closePath();
-          } else if (particleShape === 'star') {
-            const s = particleSize * p.life * 1.5;
-            for (let j = 0; j < 5; j++) {
-              const angle = (j * 4 * Math.PI) / 5 - Math.PI / 2;
-              const px = p.x + Math.cos(angle) * s;
-              const py = p.y + Math.sin(angle) * s;
-              if (j === 0) ctx.moveTo(px, py);
-              else ctx.lineTo(px, py);
-            }
-            ctx.closePath();
-          } else if (particleShape === 'diamond') {
-            const s = particleSize * p.life * 1.5;
-            ctx.moveTo(p.x, p.y - s);
-            ctx.lineTo(p.x + s, p.y);
-            ctx.lineTo(p.x, p.y + s);
-            ctx.lineTo(p.x - s, p.y);
-            ctx.closePath();
-          } else if (particleShape === 'hex') {
-            const s = particleSize * p.life * 1.5;
-            for (let j = 0; j < 6; j++) {
-              const angle = (j * Math.PI) / 3;
-              const px = p.x + Math.cos(angle) * s;
-              const py = p.y + Math.sin(angle) * s;
-              if (j === 0) ctx.moveTo(px, py);
-              else ctx.lineTo(px, py);
-            }
-            ctx.closePath();
+      if (showParticles || state.particles.length > 0) {
+        for (let i = state.particles.length - 1; i >= 0; i--) {
+          let p = state.particles[i];
+          if (state.isPlaying && !isEditorMode) {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life -= 0.02;
           }
-          ctx.fillStyle = p.color;
-          ctx.globalAlpha = p.life;
-          ctx.fill();
-          
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, particleSize * 3 * p.life, 0, Math.PI * 2);
-          ctx.fillStyle = p.color;
-          ctx.globalAlpha = p.life * 0.3;
-          ctx.fill();
-          
-          ctx.globalAlpha = 1;
+          if (p.life <= 0) {
+            state.particles.splice(i, 1);
+          } else if (ctx && showParticles) {
+            ctx.beginPath();
+            if (particleShape === 'circle') {
+              ctx.arc(p.x, p.y, particleSize * p.life, 0, Math.PI * 2);
+            } else if (particleShape === 'triangle') {
+              const s = particleSize * p.life * 1.5;
+              ctx.moveTo(p.x, p.y - s);
+              ctx.lineTo(p.x + s, p.y + s);
+              ctx.lineTo(p.x - s, p.y + s);
+              ctx.closePath();
+            } else if (particleShape === 'star') {
+              const s = particleSize * p.life * 1.5;
+              for (let j = 0; j < 5; j++) {
+                const angle = (j * 4 * Math.PI) / 5 - Math.PI / 2;
+                const px = p.x + Math.cos(angle) * s;
+                const py = p.y + Math.sin(angle) * s;
+                if (j === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+              }
+              ctx.closePath();
+            } else if (particleShape === 'diamond') {
+              const s = particleSize * p.life * 1.5;
+              ctx.moveTo(p.x, p.y - s);
+              ctx.lineTo(p.x + s, p.y);
+              ctx.lineTo(p.x, p.y + s);
+              ctx.lineTo(p.x - s, p.y);
+              ctx.closePath();
+            } else if (particleShape === 'hex') {
+              const s = particleSize * p.life * 1.5;
+              for (let j = 0; j < 6; j++) {
+                const angle = (j * Math.PI) / 3;
+                const px = p.x + Math.cos(angle) * s;
+                const py = p.y + Math.sin(angle) * s;
+                if (j === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+              }
+              ctx.closePath();
+            }
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = p.life;
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, particleSize * 3 * p.life, 0, Math.PI * 2);
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = p.life * 0.3;
+            ctx.fill();
+            
+            ctx.globalAlpha = 1;
+          }
         }
       }
 
@@ -1044,8 +1125,8 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
     };
   }, [
     duration, revealDuration, mode, backgroundColor, showGrid, showBloom, backgroundImage,
-    lineWidth, lineStyle, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier, line1Color, line2Color,
-    particleSize, particleColor1, particleColor2, particleShape, particleEmissionRate,
+    lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier, line1Color, line2Color, lineCap, outlineCap,
+    showParticles, particleSize, particleColor1, particleColor2, particleShape, particleEmissionRate,
     targetPoints, baselinePoints, targetResolution.w, targetResolution.h,
     isEditorMode, showTarget, showBaseline
   ]);

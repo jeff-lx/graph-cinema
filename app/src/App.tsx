@@ -96,22 +96,25 @@ const DEFAULT_SETTINGS = {
   showGrid: true,
   showBloom: true,
   lineWidth: 2,
-  lineStyle: 'solid' as 'solid' | 'dotted',
+  lineStyle: 'solid' as 'solid' | 'dotted' | 'shape',
+  lineShape: 'circle' as 'circle' | 'triangle' | 'square' | 'star' | 'diamond' | 'hex',
   lineDashLength: 10,
   showOutline: false,
   outlineWidth: 4,
-  outlineStyle: 'solid' as 'solid' | 'dotted',
+  outlineStyle: 'solid' as 'solid' | 'dotted' | 'shape',
+  outlineShape: 'circle' as 'circle' | 'triangle' | 'square' | 'star' | 'diamond' | 'hex',
   outlineDashLength: 10,
   outline1Color: { type: 'solid', color: '#cc4b00' } as ColorValue,
   outline2Color: { type: 'solid', color: '#00a8cc' } as ColorValue,
   pointRadius: 4,
   headShape: 'circle' as 'circle' | 'triangle' | 'star' | 'diamond' | 'hex',
-  easing: 'easeInOutCubic',
+  easing: 'linear',
   customBezier: { x1: 0.25, y1: 0.1, x2: 0.25, y2: 1.0 },
   line1Color: { type: 'solid', color: '#ff5e00' } as ColorValue, // Target
   line2Color: { type: 'solid', color: '#00d2ff' } as ColorValue, // Baseline
   lineCap: 'round' as 'round' | 'butt' | 'square',
   outlineCap: 'round' as 'round' | 'butt' | 'square',
+  showParticles: false,
   particleSize: 2,
   particleColor1: { type: 'solid', color: '#ff5e00' } as ColorValue,
   particleColor2: { type: 'solid', color: '#00d2ff' } as ColorValue,
@@ -155,10 +158,12 @@ export default function App() {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [lineWidth, setLineWidth] = useState(DEFAULT_SETTINGS.lineWidth);
   const [lineStyle, setLineStyle] = useState(DEFAULT_SETTINGS.lineStyle);
+  const [lineShape, setLineShape] = useState(DEFAULT_SETTINGS.lineShape);
   const [lineDashLength, setLineDashLength] = useState(DEFAULT_SETTINGS.lineDashLength);
   const [showOutline, setShowOutline] = useState(DEFAULT_SETTINGS.showOutline);
   const [outlineWidth, setOutlineWidth] = useState(DEFAULT_SETTINGS.outlineWidth);
   const [outlineStyle, setOutlineStyle] = useState(DEFAULT_SETTINGS.outlineStyle);
+  const [outlineShape, setOutlineShape] = useState(DEFAULT_SETTINGS.outlineShape);
   const [outlineDashLength, setOutlineDashLength] = useState(DEFAULT_SETTINGS.outlineDashLength);
   const [outline1Color, setOutline1Color] = useState<ColorValue>(DEFAULT_SETTINGS.outline1Color);
   const [outline2Color, setOutline2Color] = useState<ColorValue>(DEFAULT_SETTINGS.outline2Color);
@@ -170,6 +175,7 @@ export default function App() {
   const [line2Color, setLine2Color] = useState<ColorValue>(DEFAULT_SETTINGS.line2Color);
   const [lineCap, setLineCap] = useState(DEFAULT_SETTINGS.lineCap);
   const [outlineCap, setOutlineCap] = useState(DEFAULT_SETTINGS.outlineCap);
+  const [showParticles, setShowParticles] = useState(DEFAULT_SETTINGS.showParticles);
   const [particleSize, setParticleSize] = useState(DEFAULT_SETTINGS.particleSize);
   const [particleColor1, setParticleColor1] = useState<ColorValue>(DEFAULT_SETTINGS.particleColor1);
   const [particleColor2, setParticleColor2] = useState<ColorValue>(DEFAULT_SETTINGS.particleColor2);
@@ -302,8 +308,8 @@ export default function App() {
   };
 
   const getCurrentSettings = () => ({
-    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, lineStyle, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier,
-    line1Color, line2Color, lineCap, outlineCap, particleSize, particleColor1, particleColor2, particleShape,
+    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier,
+    line1Color, line2Color, lineCap, outlineCap, showParticles, particleSize, particleColor1, particleColor2, particleShape,
     particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline
   });
 
@@ -320,8 +326,8 @@ export default function App() {
       setHasUnsavedChanges(false);
     }
   }, [
-    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, lineStyle, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier,
-    line1Color, line2Color, particleSize, particleColor1, particleColor2, particleShape,
+    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier,
+    line1Color, line2Color, showParticles, particleSize, particleColor1, particleColor2, particleShape,
     particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline,
     currentGraphId, savedGraphs
   ]);
@@ -336,10 +342,12 @@ export default function App() {
     if (s.showBloom !== undefined) setShowBloom(s.showBloom);
     if (s.lineWidth !== undefined) setLineWidth(s.lineWidth);
     if (s.lineStyle !== undefined) setLineStyle(s.lineStyle);
+    if (s.lineShape !== undefined) setLineShape(s.lineShape);
     if (s.lineDashLength !== undefined) setLineDashLength(s.lineDashLength);
     if (s.showOutline !== undefined) setShowOutline(s.showOutline);
     if (s.outlineWidth !== undefined) setOutlineWidth(s.outlineWidth);
     if (s.outlineStyle !== undefined) setOutlineStyle(s.outlineStyle);
+    if (s.outlineShape !== undefined) setOutlineShape(s.outlineShape);
     if (s.outlineDashLength !== undefined) setOutlineDashLength(s.outlineDashLength);
     if (s.outline1Color !== undefined) setOutline1Color(parseColorValue(s.outline1Color));
     if (s.outline2Color !== undefined) setOutline2Color(parseColorValue(s.outline2Color));
@@ -351,6 +359,7 @@ export default function App() {
     if (s.line2Color !== undefined) setLine2Color(parseColorValue(s.line2Color));
     if (s.lineCap !== undefined) setLineCap(s.lineCap);
     if (s.outlineCap !== undefined) setOutlineCap(s.outlineCap);
+    if (s.showParticles !== undefined) setShowParticles(s.showParticles);
     if (s.particleSize !== undefined) setParticleSize(s.particleSize);
     if (s.particleColor1 !== undefined) setParticleColor1(parseColorValue(s.particleColor1));
     if (s.particleColor2 !== undefined) setParticleColor2(parseColorValue(s.particleColor2));
@@ -513,6 +522,7 @@ export default function App() {
         if (s.pointRadius !== undefined) setPointRadius(s.pointRadius);
         if (s.line1Color !== undefined) setLine1Color(parseColorValue(s.line1Color));
         if (s.line2Color !== undefined) setLine2Color(parseColorValue(s.line2Color));
+        if (s.showParticles !== undefined) setShowParticles(s.showParticles);
         if (s.particleSize !== undefined) setParticleSize(s.particleSize);
         if (s.particleColor1 !== undefined) setParticleColor1(parseColorValue(s.particleColor1));
         if (s.particleColor2 !== undefined) setParticleColor2(parseColorValue(s.particleColor2));
@@ -537,10 +547,12 @@ export default function App() {
     setShowBloom(DEFAULT_SETTINGS.showBloom);
     setLineWidth(DEFAULT_SETTINGS.lineWidth);
     setLineStyle(DEFAULT_SETTINGS.lineStyle);
+    setLineShape(DEFAULT_SETTINGS.lineShape);
     setLineDashLength(DEFAULT_SETTINGS.lineDashLength);
     setShowOutline(DEFAULT_SETTINGS.showOutline);
     setOutlineWidth(DEFAULT_SETTINGS.outlineWidth);
     setOutlineStyle(DEFAULT_SETTINGS.outlineStyle);
+    setOutlineShape(DEFAULT_SETTINGS.outlineShape);
     setOutlineDashLength(DEFAULT_SETTINGS.outlineDashLength);
     setOutline1Color(DEFAULT_SETTINGS.outline1Color);
     setOutline2Color(DEFAULT_SETTINGS.outline2Color);
@@ -552,6 +564,7 @@ export default function App() {
     setLine2Color(DEFAULT_SETTINGS.line2Color);
     setLineCap(DEFAULT_SETTINGS.lineCap);
     setOutlineCap(DEFAULT_SETTINGS.outlineCap);
+    setShowParticles(DEFAULT_SETTINGS.showParticles);
     setParticleSize(DEFAULT_SETTINGS.particleSize);
     setParticleColor1(DEFAULT_SETTINGS.particleColor1);
     setParticleColor2(DEFAULT_SETTINGS.particleColor2);
@@ -801,9 +814,9 @@ export default function App() {
 
           <div className="h-px bg-white/5"></div>
 
-          {/* Lighting & Glows */}
+          {/* Background */}
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-white flex items-center gap-2"><Lightbulb className="w-4 h-4"/> Lighting & Glows</h3>
+            <h3 className="text-sm font-medium text-white flex items-center gap-2"><ImageIcon className="w-4 h-4"/> Background</h3>
             
             <div className="flex items-center justify-between">
               <span className="text-sm text-zinc-400">Color</span>
@@ -855,8 +868,26 @@ export default function App() {
               >
                 <option value="solid">Solid</option>
                 <option value="dotted">Dotted</option>
+                <option value="shape">Shape</option>
               </select>
             </div>
+            {lineStyle === 'shape' && (
+              <div className="space-y-2">
+                <span className="text-xs text-zinc-400 block">Line Shape</span>
+                <select 
+                  value={lineShape} 
+                  onChange={e => setLineShape(e.target.value as any)}
+                  className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
+                >
+                  <option value="circle">Circle</option>
+                  <option value="triangle">Triangle</option>
+                  <option value="square">Square</option>
+                  <option value="star">Star</option>
+                  <option value="diamond">Diamond</option>
+                  <option value="hex">Hexagon</option>
+                </select>
+              </div>
+            )}
             <div className="space-y-2">
               <span className="text-xs text-zinc-400 block">Cap Style</span>
               <select 
@@ -869,9 +900,9 @@ export default function App() {
                 <option value="square">Square</option>
               </select>
             </div>
-            {lineStyle === 'dotted' && (
+            {(lineStyle === 'dotted' || lineStyle === 'shape') && (
               <div className="space-y-2">
-                <div className="flex justify-between text-xs text-zinc-400"><span>Dash Length</span><span>{lineDashLength}px</span></div>
+                <div className="flex justify-between text-xs text-zinc-400"><span>{lineStyle === 'shape' ? 'Spacing' : 'Dash Length'}</span><span>{lineDashLength}px</span></div>
                 <input type="range" min="1" max="50" step="1" value={lineDashLength} onChange={e => setLineDashLength(Number(e.target.value))} className="w-full accent-orange-500" />
               </div>
             )}
@@ -929,8 +960,26 @@ export default function App() {
                   >
                     <option value="solid">Solid</option>
                     <option value="dotted">Dotted</option>
+                    <option value="shape">Shape</option>
                   </select>
                 </div>
+                {outlineStyle === 'shape' && (
+                  <div className="space-y-2">
+                    <span className="text-xs text-zinc-400 block">Outline Shape</span>
+                    <select 
+                      value={outlineShape} 
+                      onChange={e => setOutlineShape(e.target.value as any)}
+                      className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
+                    >
+                      <option value="circle">Circle</option>
+                      <option value="triangle">Triangle</option>
+                      <option value="square">Square</option>
+                      <option value="star">Star</option>
+                      <option value="diamond">Diamond</option>
+                      <option value="hex">Hexagon</option>
+                    </select>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <span className="text-xs text-zinc-400 block">Cap Style</span>
                   <select 
@@ -943,9 +992,9 @@ export default function App() {
                     <option value="square">Square</option>
                   </select>
                 </div>
-                {outlineStyle === 'dotted' && (
+                {(outlineStyle === 'dotted' || outlineStyle === 'shape') && (
                   <div className="space-y-2">
-                    <div className="flex justify-between text-xs text-zinc-400"><span>Dash Length</span><span>{outlineDashLength}px</span></div>
+                    <div className="flex justify-between text-xs text-zinc-400"><span>{outlineStyle === 'shape' ? 'Spacing' : 'Dash Length'}</span><span>{outlineDashLength}px</span></div>
                     <input type="range" min="1" max="50" step="1" value={outlineDashLength} onChange={e => setOutlineDashLength(Number(e.target.value))} className="w-full accent-orange-500" />
                   </div>
                 )}
@@ -962,33 +1011,42 @@ export default function App() {
 
           {/* Particles */}
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-white flex items-center gap-2"><Sparkles className="w-4 h-4"/> Particles</h3>
-            <div className="space-y-2">
-              <span className="text-xs text-zinc-400 block">Shape</span>
-              <select 
-                value={particleShape} 
-                onChange={e => setParticleShape(e.target.value as any)}
-                className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
-              >
-                <option value="circle">Circle</option>
-                <option value="triangle">Triangle</option>
-                <option value="star">Star</option>
-                <option value="diamond">Diamond</option>
-                <option value="hex">Hexagon</option>
-              </select>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-white flex items-center gap-2"><Sparkles className="w-4 h-4"/> Particles</h3>
+              <label className="flex items-center cursor-pointer">
+                <input type="checkbox" checked={showParticles} onChange={e => setShowParticles(e.target.checked)} className="rounded bg-zinc-800 border-zinc-700 text-orange-500 focus:ring-orange-500 focus:ring-offset-zinc-900" />
+              </label>
             </div>
-            <div className="flex items-center justify-between gap-4">
-              <ColorPicker value={particleColor2} onChange={setParticleColor2} label="Baseline" />
-              <ColorPicker value={particleColor1} onChange={setParticleColor1} label="Target" align="right" />
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs text-zinc-400"><span>Size</span><span>{particleSize}px</span></div>
-              <input type="range" min="0.5" max="10" step="0.5" value={particleSize} onChange={e => setParticleSize(Number(e.target.value))} className="w-full accent-orange-500" />
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs text-zinc-400"><span>Emission Rate</span><span>{Math.round(particleEmissionRate * 100)}%</span></div>
-              <input type="range" min="0" max="1" step="0.05" value={particleEmissionRate} onChange={e => setParticleEmissionRate(Number(e.target.value))} className="w-full accent-orange-500" />
-            </div>
+            {showParticles && (
+              <>
+                <div className="space-y-2">
+                  <span className="text-xs text-zinc-400 block">Shape</span>
+                  <select 
+                    value={particleShape} 
+                    onChange={e => setParticleShape(e.target.value as any)}
+                    className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
+                  >
+                    <option value="circle">Circle</option>
+                    <option value="triangle">Triangle</option>
+                    <option value="star">Star</option>
+                    <option value="diamond">Diamond</option>
+                    <option value="hex">Hexagon</option>
+                  </select>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <ColorPicker value={particleColor2} onChange={setParticleColor2} label="Baseline" />
+                  <ColorPicker value={particleColor1} onChange={setParticleColor1} label="Target" align="right" />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs text-zinc-400"><span>Size</span><span>{particleSize}px</span></div>
+                  <input type="range" min="0.5" max="10" step="0.5" value={particleSize} onChange={e => setParticleSize(Number(e.target.value))} className="w-full accent-orange-500" />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs text-zinc-400"><span>Emission Rate</span><span>{Math.round(particleEmissionRate * 100)}%</span></div>
+                  <input type="range" min="0" max="1" step="0.05" value={particleEmissionRate} onChange={e => setParticleEmissionRate(Number(e.target.value))} className="w-full accent-orange-500" />
+                </div>
+              </>
+            )}
           </div>
 
           <div className="h-px bg-white/5"></div>
@@ -1076,10 +1134,12 @@ export default function App() {
               backgroundImage={backgroundImage}
               lineWidth={lineWidth}
               lineStyle={lineStyle}
+              lineShape={lineShape}
               lineDashLength={lineDashLength}
               showOutline={showOutline}
               outlineWidth={outlineWidth}
               outlineStyle={outlineStyle}
+              outlineShape={outlineShape}
               outlineDashLength={outlineDashLength}
               outline1Color={outline1Color}
               outline2Color={outline2Color}
@@ -1091,6 +1151,7 @@ export default function App() {
               line2Color={line2Color}
               lineCap={lineCap}
               outlineCap={outlineCap}
+              showParticles={showParticles}
               particleSize={particleSize}
               particleColor1={particleColor1}
               particleColor2={particleColor2}
@@ -1216,7 +1277,7 @@ function DataPointEditor({ title, points, onChange, color, visible, onToggleVisi
         <button 
           onClick={() => {
             const last = points[points.length - 1] || {x: 0, y: 0};
-            onChange([...points, {x: Math.min(1, last.x + 0.1), y: last.y}]);
+            onChange([...points, {x: Math.min(1, parseFloat((last.x + 0.1).toFixed(2))), y: last.y}]);
           }} 
           className="text-xs hover:text-white transition-colors"
           style={{ color: displayColor }}
@@ -1234,7 +1295,7 @@ function DataPointEditor({ title, points, onChange, color, visible, onToggleVisi
                 <DraggableInput 
                   step={0.01} 
                   value={p.x} 
-                  onChange={(val: number) => { const n = [...points]; n[i] = { ...n[i], x: val }; onChange(n); }} 
+                  onChange={(val: number) => { const n = [...points]; n[i] = { ...n[i], x: parseFloat(val.toFixed(2)) }; onChange(n); }} 
                   className="w-full bg-zinc-900 rounded px-1.5 py-0.5 text-xs text-zinc-200 border border-transparent focus:border-white/20 outline-none font-mono disabled:opacity-50" 
                   disabled={!visible}
                 />
@@ -1244,7 +1305,7 @@ function DataPointEditor({ title, points, onChange, color, visible, onToggleVisi
                 <DraggableInput 
                   step={0.01} 
                   value={p.y} 
-                  onChange={(val: number) => { const n = [...points]; n[i] = { ...n[i], y: val }; onChange(n); }} 
+                  onChange={(val: number) => { const n = [...points]; n[i] = { ...n[i], y: parseFloat(val.toFixed(2)) }; onChange(n); }} 
                   className="w-full bg-zinc-900 rounded px-1.5 py-0.5 text-xs text-zinc-200 border border-transparent focus:border-white/20 outline-none font-mono disabled:opacity-50" 
                   disabled={!visible}
                 />
