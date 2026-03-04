@@ -379,7 +379,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       const coords = getNormCoords(e);
       if (!coords) return;
       
-      let closestDist = 0.05;
+      let closestDist = 0.02;
       let hitType: 'target' | 'baseline' | null = null;
       let hitIndex = -1;
       
@@ -425,7 +425,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
           latestProps.current.onBaselinePointsChange(pts);
         }
       } else {
-        let closestDist = 0.05;
+        let closestDist = 0.02;
         let hitType: 'target' | 'baseline' | null = null;
         let hitIndex = -1;
         
@@ -458,21 +458,8 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
     const handleMouseUp = () => {
       if (dragState.current.isDragging) {
         dragState.current.isDragging = false;
-        const { type } = dragState.current;
         dragState.current.type = null;
         dragState.current.index = -1;
-        
-        // Sort points by X on release to maintain valid line graph
-        const sortPts = (pts: {x:number, y:number}[], onChange: (p: {x:number, y:number}[]) => void) => {
-          const sorted = [...pts].sort((a, b) => a.x - b.x);
-          onChange(sorted);
-        };
-        
-        if (type === 'target' && latestProps.current.onTargetPointsChange) {
-          sortPts(latestProps.current.targetPoints, latestProps.current.onTargetPointsChange);
-        } else if (type === 'baseline' && latestProps.current.onBaselinePointsChange) {
-          sortPts(latestProps.current.baselinePoints, latestProps.current.onBaselinePointsChange);
-        }
       }
     };
 
@@ -485,7 +472,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       
       let hitType: 'target' | 'baseline' | null = null;
       let hitIndex = -1;
-      let closestDist = 0.05;
+      let closestDist = 0.02;
 
       const checkPoints = (pts: {x:number, y:number}[], type: 'target' | 'baseline') => {
         pts.forEach((p, i) => {
@@ -515,7 +502,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       // If no node clicked, check if we clicked on a line segment to insert a node
       let insertType: 'target' | 'baseline' | null = null;
       let insertIndex = -1;
-      let minLineDist = 0.05;
+      let minLineDist = 0.02;
       let insertPoint = { x: 0, y: 0 };
 
       const checkLineSegments = (pts: {x:number, y:number}[], type: 'target' | 'baseline') => {
@@ -992,16 +979,16 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
         const cy = height - padding - p.y * (height - padding * 2);
         
         ctx.beginPath();
-        ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+        ctx.arc(cx, cy, 8, 0, Math.PI * 2);
         ctx.fillStyle = getParticleColor(colorValue, cx);
         ctx.fill();
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2.5;
         ctx.strokeStyle = '#fff';
         ctx.stroke();
         
         if (dragState.current.hoveredType === type && dragState.current.hoveredIndex === i) {
           ctx.beginPath();
-          ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+          ctx.arc(cx, cy, 14, 0, Math.PI * 2);
           ctx.strokeStyle = '#fff';
           ctx.stroke();
         }
