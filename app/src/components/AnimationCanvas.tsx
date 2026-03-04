@@ -31,7 +31,7 @@ interface Props {
   outline1Color: ColorValue;
   outline2Color: ColorValue;
   pointRadius: number;
-  headShape: 'circle' | 'triangle' | 'star' | 'diamond' | 'hex';
+  headShape: 'circle' | 'triangle' | 'square' | 'star' | 'diamond' | 'hex';
   easing: string;
   customBezier: { x1: number, y1: number, x2: number, y2: number };
   line1Color: ColorValue;
@@ -42,18 +42,21 @@ interface Props {
   particleSize: number;
   particleColor1: ColorValue;
   particleColor2: ColorValue;
-  particleShape: 'circle' | 'triangle' | 'star' | 'diamond' | 'hex';
+  particleShape: 'circle' | 'triangle' | 'square' | 'star' | 'diamond' | 'hex';
   particleEmissionRate: number;
   targetPoints: {x: number, y: number}[];
   baselinePoints: {x: number, y: number}[];
   showTarget: boolean;
   showBaseline: boolean;
+  enableTrailDecay: boolean;
+  trailDecayFactor: number;
   targetResolution: { w: number, h: number };
   isEditorMode?: boolean;
   onTargetPointsChange?: (pts: {x: number, y: number}[]) => void;
   onBaselinePointsChange?: (pts: {x: number, y: number}[]) => void;
   onTimeUpdate?: (time: number) => void;
   onPlayStateChange: (isPlaying: boolean) => void;
+  isLooping: boolean;
 }
 
 // Spline interpolation
@@ -164,9 +167,9 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
   duration, revealDuration, mode, backgroundColor, showGrid, showBloom, backgroundImage,
   lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier, line1Color, line2Color, lineCap, outlineCap,
   showParticles, particleSize, particleColor1, particleColor2, particleShape, particleEmissionRate,
-  targetPoints, baselinePoints, showTarget, showBaseline, targetResolution,
+  targetPoints, baselinePoints, showTarget, showBaseline, enableTrailDecay, trailDecayFactor, targetResolution,
   isEditorMode, onTargetPointsChange, onBaselinePointsChange, onTimeUpdate,
-  onPlayStateChange 
+  onPlayStateChange, isLooping
 }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bgImageRef = useRef<HTMLImageElement | null>(null);
@@ -176,6 +179,10 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
     progress: 0,
     fillProgress: 0,
     lastTime: 0,
+    lastOrangeProg: 0,
+    lastBlueProg: 0,
+    lastEnableTrailDecay: false,
+    needsRedraw: false,
     particles: [] as any[],
     isRecording: false,
     transparentBg: false,
@@ -565,6 +572,8 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
     
     let animationFrameId: number;
     let ctx: CanvasRenderingContext2D | null = null;
+    let trailCanvas: HTMLCanvasElement | null = null;
+    let trailCtx: CanvasRenderingContext2D | null = null;
     let width = targetResolution.w;
     let height = targetResolution.h;
     let bluePts: {x:number, y:number}[] = [];
@@ -580,6 +589,16 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       canvas.height = height;
       ctx = canvas.getContext('2d', { alpha: true });
       padding = Math.max(40, Math.min(width, height) * 0.08);
+
+      if (enableTrailDecay) {
+        trailCanvas = document.createElement('canvas');
+        trailCanvas.width = width;
+        trailCanvas.height = height;
+        trailCtx = trailCanvas.getContext('2d', { alpha: true });
+      } else {
+        trailCanvas = null;
+        trailCtx = null;
+      }
 
       const mapPoints = (pts: {x:number, y:number}[]) => {
         const w = width - padding * 2;
@@ -809,12 +828,32 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       ctx.setLineDash([]);
     };
 
-    const drawLine = (pts: {x:number, y:number}[], lengths: number[], totalLength: number, progress: number, colorValue: ColorValue) => {
-      if (!ctx || progress <= 0 || pts.length === 0) return null;
-      const targetLen = totalLength * progress;
+    const drawLine = (targetCtx: CanvasRenderingContext2D, pts: {x:number, y:number}[], lengths: number[], totalLength: number, startProgress: number, endProgress: number, colorValue: ColorValue, drawHead: boolean) => {
+      if (!targetCtx || endProgress <= 0 || pts.length === 0) return null;
+      const startLen = totalLength * startProgress;
+      const targetLen = totalLength * endProgress;
+      
+      let startIdx = 1;
+      while (startIdx < lengths.length && lengths[startIdx] < startLen) {
+        startIdx++;
+      }
+      
       let endIdx = 1;
       while (endIdx < lengths.length && lengths[endIdx] < targetLen) {
         endIdx++;
+      }
+
+      let startPos = pts[startIdx - 1];
+      if (startIdx < pts.length) {
+        const p1 = pts[startIdx - 1];
+        const p2 = pts[startIdx];
+        const l1 = lengths[startIdx - 1];
+        const l2 = lengths[startIdx];
+        const t = l2 === l1 ? 0 : (startLen - l1) / (l2 - l1);
+        startPos = {
+          x: p1.x + (p2.x - p1.x) * t,
+          y: p1.y + (p2.y - p1.y) * t
+        };
       }
 
       let currentPos = pts[endIdx - 1];
@@ -823,90 +862,96 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
         const p2 = pts[endIdx];
         const l1 = lengths[endIdx - 1];
         const l2 = lengths[endIdx];
-        const t = (targetLen - l1) / (l2 - l1);
+        const t = l2 === l1 ? 0 : (targetLen - l1) / (l2 - l1);
         currentPos = {
           x: p1.x + (p2.x - p1.x) * t,
           y: p1.y + (p2.y - p1.y) * t
         };
       }
 
-      if (lineStyle === 'shape') {
-        let dist = 0;
-        ctx.save();
-        while (dist <= targetLen) {
-          let p = getPointAtDistance(pts, lengths, dist);
+      if (startProgress < endProgress) {
+        if (lineStyle === 'shape') {
+          let dist = Math.ceil(startLen / lineDashLength) * lineDashLength;
+          if (dist < startLen) dist += lineDashLength;
           
-          ctx.shadowBlur = lineWidth * 4;
-          ctx.shadowColor = getCanvasColor(colorValue);
-          ctx.fillStyle = getCanvasColor(colorValue);
-          
-          ctx.beginPath();
-          drawShape(ctx, p.x, p.y, lineWidth / 2, lineShape);
-          ctx.fill();
-          
-          ctx.shadowBlur = 0;
-          ctx.fillStyle = '#fff';
-          ctx.beginPath();
-          drawShape(ctx, p.x, p.y, lineWidth / 4, lineShape);
-          ctx.fill();
-          
-          dist += lineDashLength;
-        }
-        ctx.restore();
-      } else {
-        ctx.beginPath();
-        ctx.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < endIdx; i++) {
-          ctx.lineTo(pts[i].x, pts[i].y);
-        }
-        if (endIdx < pts.length) {
-          ctx.lineTo(currentPos.x, currentPos.y);
-        }
-
-        ctx.lineCap = lineCap;
-        ctx.lineJoin = 'round';
-        
-        if (lineStyle === 'dotted') {
-          ctx.setLineDash([lineDashLength, lineDashLength]);
+          targetCtx.save();
+          while (dist <= targetLen) {
+            let p = getPointAtDistance(pts, lengths, dist);
+            
+            targetCtx.shadowBlur = lineWidth * 4;
+            targetCtx.shadowColor = getCanvasColor(colorValue);
+            targetCtx.fillStyle = getCanvasColor(colorValue);
+            
+            targetCtx.beginPath();
+            drawShape(targetCtx, p.x, p.y, lineWidth / 2, lineShape);
+            targetCtx.fill();
+            
+            targetCtx.shadowBlur = 0;
+            targetCtx.fillStyle = '#fff';
+            targetCtx.beginPath();
+            drawShape(targetCtx, p.x, p.y, lineWidth / 4, lineShape);
+            targetCtx.fill();
+            
+            dist += lineDashLength;
+          }
+          targetCtx.restore();
         } else {
-          ctx.setLineDash([]);
+          targetCtx.beginPath();
+          targetCtx.moveTo(startPos.x, startPos.y);
+          for (let i = startIdx; i < endIdx; i++) {
+            targetCtx.lineTo(pts[i].x, pts[i].y);
+          }
+          if (endIdx < pts.length) {
+            targetCtx.lineTo(currentPos.x, currentPos.y);
+          }
+
+          targetCtx.lineCap = lineCap;
+          targetCtx.lineJoin = 'round';
+          
+          if (lineStyle === 'dotted') {
+            targetCtx.setLineDash([lineDashLength, lineDashLength]);
+            targetCtx.lineDashOffset = startLen;
+          } else {
+            targetCtx.setLineDash([]);
+          }
+
+          // Glow effect using filter for perfect smooth gradients
+          targetCtx.save();
+          targetCtx.filter = `blur(${lineWidth * 4}px)`;
+          targetCtx.strokeStyle = getCanvasColor(colorValue);
+          targetCtx.lineWidth = lineWidth * 4;
+          targetCtx.stroke();
+          
+          targetCtx.filter = `blur(${lineWidth * 8}px)`;
+          targetCtx.lineWidth = lineWidth * 8;
+          targetCtx.stroke();
+          targetCtx.restore();
+          
+          // Core line
+          targetCtx.lineWidth = lineWidth;
+          targetCtx.strokeStyle = '#fff';
+          targetCtx.stroke();
+
+          targetCtx.setLineDash([]); // Reset dash
+          targetCtx.lineDashOffset = 0;
         }
-
-        // Glow effect using filter for perfect smooth gradients
-        ctx.save();
-        ctx.filter = `blur(${lineWidth * 4}px)`;
-        ctx.strokeStyle = getCanvasColor(colorValue);
-        ctx.lineWidth = lineWidth * 4;
-        ctx.stroke();
-        
-        ctx.filter = `blur(${lineWidth * 8}px)`;
-        ctx.lineWidth = lineWidth * 8;
-        ctx.stroke();
-        ctx.restore();
-        
-        // Core line
-        ctx.lineWidth = lineWidth;
-        ctx.strokeStyle = '#fff';
-        ctx.stroke();
-
-        ctx.setLineDash([]); // Reset dash
       }
 
-      if (pointRadius > 0) {
+      if (drawHead && pointRadius > 0) {
         // Draw head glow
-        ctx.save();
-        ctx.filter = `blur(${pointRadius * 1.5}px)`;
-        ctx.beginPath();
-        drawShape(ctx, currentPos.x, currentPos.y, pointRadius * 2, headShape);
-        ctx.fillStyle = getCanvasColor(colorValue);
-        ctx.fill();
-        ctx.restore();
+        targetCtx.save();
+        targetCtx.filter = `blur(${pointRadius * 1.5}px)`;
+        targetCtx.beginPath();
+        drawShape(targetCtx, currentPos.x, currentPos.y, pointRadius * 2, headShape);
+        targetCtx.fillStyle = getCanvasColor(colorValue);
+        targetCtx.fill();
+        targetCtx.restore();
 
         // Draw head core
-        ctx.beginPath();
-        drawShape(ctx, currentPos.x, currentPos.y, pointRadius, headShape);
-        ctx.fillStyle = '#fff';
-        ctx.fill();
+        targetCtx.beginPath();
+        drawShape(targetCtx, currentPos.x, currentPos.y, pointRadius, headShape);
+        targetCtx.fillStyle = '#fff';
+        targetCtx.fill();
       }
 
       return currentPos;
@@ -990,6 +1035,14 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
               }, 100);
             }
             onPlayStateChange(false);
+          } else if (isLooping) {
+            state.progress = 0;
+            state.fillProgress = 0;
+            state.lastOrangeProg = 0;
+            state.lastBlueProg = 0;
+            if (trailCtx) {
+              trailCtx.clearRect(0, 0, width, height);
+            }
           } else {
             state.isPlaying = false;
             onPlayStateChange(false);
@@ -1037,8 +1090,48 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
         drawFill(getEased(state.fillProgress));
       }
 
-      const orangePos = showTarget ? drawLine(orangePts, orangeData.lengths, orangeData.total, orangeProg, line1Color) : null;
-      const bluePos = showBaseline ? drawLine(bluePts, blueData.lengths, blueData.total, blueProg, line2Color) : null;
+      let orangePos = null;
+      let bluePos = null;
+
+      if (enableTrailDecay && trailCtx && trailCanvas && ctx && !isEditorMode) {
+        if (state.isPlaying) {
+          if (orangeProg < state.lastOrangeProg || blueProg < state.lastBlueProg) {
+            trailCtx.clearRect(0, 0, width, height);
+          } else {
+            trailCtx.globalCompositeOperation = 'copy';
+            trailCtx.globalAlpha = 1 - trailDecayFactor;
+            trailCtx.drawImage(trailCtx.canvas, 0.01, 0.01);
+            trailCtx.globalAlpha = 1.0;
+            trailCtx.globalCompositeOperation = 'source-over';
+          }
+
+          if (showTarget) {
+            const startP = orangeProg < state.lastOrangeProg ? 0 : state.lastOrangeProg;
+            drawLine(trailCtx, orangePts, orangeData.lengths, orangeData.total, startP, orangeProg, line1Color, false);
+          }
+          if (showBaseline) {
+            const startP = blueProg < state.lastBlueProg ? 0 : state.lastBlueProg;
+            drawLine(trailCtx, bluePts, blueData.lengths, blueData.total, startP, blueProg, line2Color, false);
+          }
+        } else if (orangeProg !== state.lastOrangeProg || blueProg !== state.lastBlueProg || state.progress === 0 || enableTrailDecay !== state.lastEnableTrailDecay || state.needsRedraw) {
+          trailCtx.clearRect(0, 0, width, height);
+          if (showTarget) drawLine(trailCtx, orangePts, orangeData.lengths, orangeData.total, 0, orangeProg, line1Color, false);
+          if (showBaseline) drawLine(trailCtx, bluePts, blueData.lengths, blueData.total, 0, blueProg, line2Color, false);
+          state.needsRedraw = false;
+        }
+
+        ctx.drawImage(trailCanvas, 0, 0);
+
+        orangePos = showTarget ? drawLine(ctx, orangePts, orangeData.lengths, orangeData.total, orangeProg, orangeProg, line1Color, true) : null;
+        bluePos = showBaseline ? drawLine(ctx, bluePts, blueData.lengths, blueData.total, blueProg, blueProg, line2Color, true) : null;
+      } else if (ctx) {
+        orangePos = showTarget ? drawLine(ctx, orangePts, orangeData.lengths, orangeData.total, 0, orangeProg, line1Color, true) : null;
+        bluePos = showBaseline ? drawLine(ctx, bluePts, blueData.lengths, blueData.total, 0, blueProg, line2Color, true) : null;
+      }
+
+      state.lastOrangeProg = orangeProg;
+      state.lastBlueProg = blueProg;
+      state.lastEnableTrailDecay = enableTrailDecay;
 
       if (state.isPlaying && !isEditorMode && showParticles) {
         if (orangePos && orangeProg < 1) spawnParticles(orangePos, particleColor1);
@@ -1066,6 +1159,9 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
               ctx.lineTo(p.x + s, p.y + s);
               ctx.lineTo(p.x - s, p.y + s);
               ctx.closePath();
+            } else if (particleShape === 'square') {
+              const s = particleSize * p.life * 1.5;
+              ctx.rect(p.x - s, p.y - s, s * 2, s * 2);
             } else if (particleShape === 'star') {
               const s = particleSize * p.life * 1.5;
               for (let j = 0; j < 5; j++) {
@@ -1128,7 +1224,15 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
     lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier, line1Color, line2Color, lineCap, outlineCap,
     showParticles, particleSize, particleColor1, particleColor2, particleShape, particleEmissionRate,
     targetPoints, baselinePoints, targetResolution.w, targetResolution.h,
-    isEditorMode, showTarget, showBaseline
+    isEditorMode, showTarget, showBaseline, enableTrailDecay, trailDecayFactor, isLooping
+  ]);
+
+  useEffect(() => {
+    stateRef.current.needsRedraw = true;
+  }, [
+    lineWidth, lineStyle, lineShape, lineDashLength, line1Color, line2Color, lineCap,
+    outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, outlineCap, showOutline,
+    pointRadius, headShape, easing, customBezier, targetPoints, baselinePoints, showTarget, showBaseline
   ]);
 
   return (

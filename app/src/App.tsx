@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Play, Pause, Square, RotateCcw, Download, Video, Film, Grid, Settings2, Image as ImageIcon, Trash2, Upload, RefreshCw, Save, Activity, Monitor, Edit3, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Clock, Eye, EyeOff, FolderOpen, Lightbulb, Maximize, Sparkles, Database } from 'lucide-react';
+import { Play, Pause, Square, RotateCcw, Download, Video, Film, Grid, Settings2, Image as ImageIcon, Trash2, Upload, RefreshCw, Save, Activity, Monitor, Edit3, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Clock, Eye, EyeOff, FolderOpen, Lightbulb, Maximize, Sparkles, Database, Check, Repeat } from 'lucide-react';
 import AnimationCanvas, { AnimationCanvasRef } from './components/AnimationCanvas';
 import ColorPicker from './components/ColorPicker';
 import { ColorValue } from './types';
@@ -107,7 +107,7 @@ const DEFAULT_SETTINGS = {
   outline1Color: { type: 'solid', color: '#cc4b00' } as ColorValue,
   outline2Color: { type: 'solid', color: '#00a8cc' } as ColorValue,
   pointRadius: 4,
-  headShape: 'circle' as 'circle' | 'triangle' | 'star' | 'diamond' | 'hex',
+  headShape: 'circle' as 'circle' | 'triangle' | 'square' | 'star' | 'diamond' | 'hex',
   easing: 'linear',
   customBezier: { x1: 0.25, y1: 0.1, x2: 0.25, y2: 1.0 },
   line1Color: { type: 'solid', color: '#ff5e00' } as ColorValue, // Target
@@ -118,7 +118,7 @@ const DEFAULT_SETTINGS = {
   particleSize: 2,
   particleColor1: { type: 'solid', color: '#ff5e00' } as ColorValue,
   particleColor2: { type: 'solid', color: '#00d2ff' } as ColorValue,
-  particleShape: 'circle' as 'circle' | 'triangle' | 'star' | 'diamond' | 'hex',
+  particleShape: 'circle' as 'circle' | 'triangle' | 'square' | 'star' | 'diamond' | 'hex',
   particleEmissionRate: 0.5,
   targetPoints: [
     {x: 0, y: 0}, {x: 0.09, y: 0.04}, {x: 0.18, y: 0.12}, {x: 0.23, y: 0.14},
@@ -133,7 +133,9 @@ const DEFAULT_SETTINGS = {
     {x: 0.88, y: 0.70}, {x: 0.95, y: 0.78}, {x: 1.0, y: 0.89}
   ],
   showTarget: true,
-  showBaseline: true
+  showBaseline: true,
+  enableTrailDecay: false,
+  trailDecayFactor: 0.05
 };
 
 export default function App() {
@@ -141,6 +143,7 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isLooping, setIsLooping] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [isEditorMode, setIsEditorMode] = useState(false);
@@ -185,6 +188,8 @@ export default function App() {
   const [baselinePoints, setBaselinePoints] = useState(DEFAULT_SETTINGS.baselinePoints);
   const [showTarget, setShowTarget] = useState(true);
   const [showBaseline, setShowBaseline] = useState(true);
+  const [enableTrailDecay, setEnableTrailDecay] = useState(DEFAULT_SETTINGS.enableTrailDecay);
+  const [trailDecayFactor, setTrailDecayFactor] = useState(DEFAULT_SETTINGS.trailDecayFactor);
 
   // Save System State
   const [savedGraphs, setSavedGraphs] = useState<{id: string, name: string, settings: any}[]>([]);
@@ -308,9 +313,9 @@ export default function App() {
   };
 
   const getCurrentSettings = () => ({
-    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier,
+    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, backgroundImage, lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier,
     line1Color, line2Color, lineCap, outlineCap, showParticles, particleSize, particleColor1, particleColor2, particleShape,
-    particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline
+    particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline, enableTrailDecay, trailDecayFactor
   });
 
   useEffect(() => {
@@ -326,9 +331,9 @@ export default function App() {
       setHasUnsavedChanges(false);
     }
   }, [
-    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier,
-    line1Color, line2Color, showParticles, particleSize, particleColor1, particleColor2, particleShape,
-    particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline,
+    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, backgroundImage, lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier,
+    line1Color, line2Color, lineCap, outlineCap, showParticles, particleSize, particleColor1, particleColor2, particleShape,
+    particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline, enableTrailDecay, trailDecayFactor,
     currentGraphId, savedGraphs
   ]);
 
@@ -340,6 +345,7 @@ export default function App() {
     if (s.bgColor !== undefined) setBgColor(s.bgColor);
     if (s.showGrid !== undefined) setShowGrid(s.showGrid);
     if (s.showBloom !== undefined) setShowBloom(s.showBloom);
+    if (s.backgroundImage !== undefined) setBackgroundImage(s.backgroundImage);
     if (s.lineWidth !== undefined) setLineWidth(s.lineWidth);
     if (s.lineStyle !== undefined) setLineStyle(s.lineStyle);
     if (s.lineShape !== undefined) setLineShape(s.lineShape);
@@ -369,6 +375,8 @@ export default function App() {
     if (s.baselinePoints !== undefined) setBaselinePoints(JSON.parse(JSON.stringify(s.baselinePoints)));
     if (s.showTarget !== undefined) setShowTarget(s.showTarget);
     if (s.showBaseline !== undefined) setShowBaseline(s.showBaseline);
+    if (s.enableTrailDecay !== undefined) setEnableTrailDecay(s.enableTrailDecay);
+    if (s.trailDecayFactor !== undefined) setTrailDecayFactor(s.trailDecayFactor);
   };
 
   const openPrompt = (title: string, defaultValue: string, onConfirm: (val: string) => void) => {
@@ -491,11 +499,7 @@ export default function App() {
   };
 
   const handleExportSettings = () => {
-    const settings = {
-      duration, mode, resolution, bgColor, showGrid, showBloom, lineWidth, pointRadius,
-      line1Color, line2Color, particleSize, particleColor1, particleColor2,
-      particleEmissionRate, targetPoints, baselinePoints
-    };
+    const settings = getCurrentSettings();
     const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -512,23 +516,7 @@ export default function App() {
     reader.onload = (event) => {
       try {
         const s = JSON.parse(event.target?.result as string);
-        if (s.duration !== undefined) setDuration(s.duration);
-        if (s.mode !== undefined) setMode(s.mode);
-        if (s.resolution !== undefined) setResolution(s.resolution);
-        if (s.bgColor !== undefined) setBgColor(s.bgColor);
-        if (s.showGrid !== undefined) setShowGrid(s.showGrid);
-        if (s.showBloom !== undefined) setShowBloom(s.showBloom);
-        if (s.lineWidth !== undefined) setLineWidth(s.lineWidth);
-        if (s.pointRadius !== undefined) setPointRadius(s.pointRadius);
-        if (s.line1Color !== undefined) setLine1Color(parseColorValue(s.line1Color));
-        if (s.line2Color !== undefined) setLine2Color(parseColorValue(s.line2Color));
-        if (s.showParticles !== undefined) setShowParticles(s.showParticles);
-        if (s.particleSize !== undefined) setParticleSize(s.particleSize);
-        if (s.particleColor1 !== undefined) setParticleColor1(parseColorValue(s.particleColor1));
-        if (s.particleColor2 !== undefined) setParticleColor2(parseColorValue(s.particleColor2));
-        if (s.particleEmissionRate !== undefined) setParticleEmissionRate(s.particleEmissionRate);
-        if (s.targetPoints !== undefined) setTargetPoints(s.targetPoints);
-        if (s.baselinePoints !== undefined) setBaselinePoints(s.baselinePoints);
+        loadSettings(s);
       } catch (err) {
         alert("Invalid settings file");
       }
@@ -545,6 +533,7 @@ export default function App() {
     setBgColor(DEFAULT_SETTINGS.bgColor);
     setShowGrid(DEFAULT_SETTINGS.showGrid);
     setShowBloom(DEFAULT_SETTINGS.showBloom);
+    setBackgroundImage(null);
     setLineWidth(DEFAULT_SETTINGS.lineWidth);
     setLineStyle(DEFAULT_SETTINGS.lineStyle);
     setLineShape(DEFAULT_SETTINGS.lineShape);
@@ -574,6 +563,8 @@ export default function App() {
     setBaselinePoints(JSON.parse(JSON.stringify(DEFAULT_SETTINGS.baselinePoints)));
     setShowTarget(DEFAULT_SETTINGS.showTarget);
     setShowBaseline(DEFAULT_SETTINGS.showBaseline);
+    setEnableTrailDecay(DEFAULT_SETTINGS.enableTrailDecay);
+    setTrailDecayFactor(DEFAULT_SETTINGS.trailDecayFactor);
     setBackgroundImage(null);
   };
 
@@ -599,6 +590,14 @@ export default function App() {
             </button>
             <button onClick={handleRestart} disabled={isRecording} className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-full transition-colors disabled:opacity-50 shrink-0">
               <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+            <button 
+              onClick={() => setIsLooping(!isLooping)} 
+              disabled={isRecording} 
+              className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors disabled:opacity-50 shrink-0 ${isLooping ? 'text-orange-500 bg-orange-500/10' : 'text-zinc-400 hover:text-white hover:bg-zinc-700'}`}
+              title={isLooping ? "Disable Loop" : "Enable Loop"}
+            >
+              <Repeat className="w-3.5 h-3.5" />
             </button>
           </div>
 
@@ -714,12 +713,29 @@ export default function App() {
             <h3 className="text-sm font-medium text-white flex items-center gap-2"><Clock className="w-4 h-4"/> Animation</h3>
             <div className="space-y-2">
               <div className="flex justify-between text-xs text-zinc-400"><span>Duration</span><span>{duration}s</span></div>
-              <input type="range" min="2" max="30" step="1" value={duration} onChange={(e) => setDuration(Number(e.target.value))} disabled={isRecording} className="w-full accent-orange-500" />
+              <input type="range" min="1" max="30" step="1" value={duration} onChange={(e) => setDuration(Number(e.target.value))} disabled={isRecording} className="w-full accent-orange-500" />
             </div>
             <div className="space-y-2">
               <div className="flex justify-between text-xs text-zinc-400"><span>Reveal Duration</span><span>{revealDuration}s</span></div>
               <input type="range" min="0" max="10" step="0.5" value={revealDuration} onChange={(e) => setRevealDuration(Number(e.target.value))} disabled={isRecording} className="w-full accent-orange-500" />
             </div>
+            
+            <div className="space-y-2 pt-2">
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${enableTrailDecay ? 'bg-orange-500 border-orange-500' : 'border-zinc-600 group-hover:border-zinc-500'}`}>
+                  {enableTrailDecay && <Check className="w-3 h-3 text-white" />}
+                </div>
+                <span className="text-xs text-zinc-300">Enable Trail Decay</span>
+                <input type="checkbox" checked={enableTrailDecay} onChange={(e) => setEnableTrailDecay(e.target.checked)} className="hidden" />
+              </label>
+            </div>
+            
+            {enableTrailDecay && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-zinc-400"><span>Trail Decay Factor</span><span>{trailDecayFactor.toFixed(2)}</span></div>
+                <input type="range" min="0.01" max="0.50" step="0.01" value={trailDecayFactor} onChange={(e) => setTrailDecayFactor(Number(e.target.value))} className="w-full accent-orange-500" />
+              </div>
+            )}
             
             <div className="space-y-2">
               <span className="text-xs text-zinc-400 block">Easing Curve</span>
@@ -903,13 +919,13 @@ export default function App() {
             {(lineStyle === 'dotted' || lineStyle === 'shape') && (
               <div className="space-y-2">
                 <div className="flex justify-between text-xs text-zinc-400"><span>{lineStyle === 'shape' ? 'Spacing' : 'Dash Length'}</span><span>{lineDashLength}px</span></div>
-                <input type="range" min="1" max="50" step="1" value={lineDashLength} onChange={e => setLineDashLength(Number(e.target.value))} className="w-full accent-orange-500" />
+                <input type="range" min="1" max="100" step="1" value={lineDashLength} onChange={e => setLineDashLength(Number(e.target.value))} className="w-full accent-orange-500" />
               </div>
             )}
 
             <div className="space-y-2">
               <div className="flex justify-between text-xs text-zinc-400"><span>Width</span><span>{lineWidth}px</span></div>
-              <input type="range" min="1" max="10" step="1" value={lineWidth} onChange={e => setLineWidth(Number(e.target.value))} className="w-full accent-orange-500" />
+              <input type="range" min="1" max="30" step="1" value={lineWidth} onChange={e => setLineWidth(Number(e.target.value))} className="w-full accent-orange-500" />
             </div>
             
             <div className="space-y-2">
@@ -921,6 +937,7 @@ export default function App() {
               >
                 <option value="circle">Circle</option>
                 <option value="triangle">Triangle</option>
+                <option value="square">Square</option>
                 <option value="star">Star</option>
                 <option value="diamond">Diamond</option>
                 <option value="hex">Hexagon</option>
@@ -995,13 +1012,13 @@ export default function App() {
                 {(outlineStyle === 'dotted' || outlineStyle === 'shape') && (
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs text-zinc-400"><span>{outlineStyle === 'shape' ? 'Spacing' : 'Dash Length'}</span><span>{outlineDashLength}px</span></div>
-                    <input type="range" min="1" max="50" step="1" value={outlineDashLength} onChange={e => setOutlineDashLength(Number(e.target.value))} className="w-full accent-orange-500" />
+                    <input type="range" min="1" max="100" step="1" value={outlineDashLength} onChange={e => setOutlineDashLength(Number(e.target.value))} className="w-full accent-orange-500" />
                   </div>
                 )}
 
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs text-zinc-400"><span>Width</span><span>{outlineWidth}px</span></div>
-                  <input type="range" min="1" max="20" step="1" value={outlineWidth} onChange={e => setOutlineWidth(Number(e.target.value))} className="w-full accent-orange-500" />
+                  <input type="range" min="1" max="30" step="1" value={outlineWidth} onChange={e => setOutlineWidth(Number(e.target.value))} className="w-full accent-orange-500" />
                 </div>
               </>
             )}
@@ -1028,6 +1045,7 @@ export default function App() {
                   >
                     <option value="circle">Circle</option>
                     <option value="triangle">Triangle</option>
+                    <option value="square">Square</option>
                     <option value="star">Star</option>
                     <option value="diamond">Diamond</option>
                     <option value="hex">Hexagon</option>
@@ -1161,12 +1179,15 @@ export default function App() {
               baselinePoints={baselinePoints}
               showTarget={showTarget}
               showBaseline={showBaseline}
+              enableTrailDecay={enableTrailDecay}
+              trailDecayFactor={trailDecayFactor}
               targetResolution={resolution}
               isEditorMode={isEditorMode}
               onTargetPointsChange={setTargetPoints}
               onBaselinePointsChange={setBaselinePoints}
               onTimeUpdate={setCurrentTime}
               onPlayStateChange={setIsPlaying}
+              isLooping={isLooping}
             />
 
             {/* Recording Overlay */}
