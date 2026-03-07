@@ -32,8 +32,10 @@ interface Props {
   outline2Color: ColorValue;
   pointRadius: number;
   headShape: 'circle' | 'triangle' | 'square' | 'star' | 'diamond' | 'hex';
-  easing: string;
-  customBezier: { x1: number, y1: number, x2: number, y2: number };
+  targetEasing: string;
+  targetCustomBezier: { x1: number, y1: number, x2: number, y2: number };
+  baselineEasing: string;
+  baselineCustomBezier: { x1: number, y1: number, x2: number, y2: number };
   line1Color: ColorValue;
   line2Color: ColorValue;
   lineCap: 'round' | 'butt' | 'square';
@@ -48,8 +50,10 @@ interface Props {
   baselinePoints: {x: number, y: number}[];
   showTarget: boolean;
   showBaseline: boolean;
-  enableTrailDecay: boolean;
-  trailDecayFactor: number;
+  targetEnableTrailDecay: boolean;
+  targetTrailDecayFactor: number;
+  baselineEnableTrailDecay: boolean;
+  baselineTrailDecayFactor: number;
   targetResolution: { w: number, h: number };
   isEditorMode?: boolean;
   onTargetPointsChange?: (pts: {x: number, y: number}[]) => void;
@@ -165,9 +169,9 @@ const hexToRgb = (hex: string) => {
 
 const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({ 
   duration, revealDuration, mode, backgroundColor, showGrid, showBloom, backgroundImage,
-  lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier, line1Color, line2Color, lineCap, outlineCap,
+  lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, targetEasing, targetCustomBezier, baselineEasing, baselineCustomBezier, line1Color, line2Color, lineCap, outlineCap,
   showParticles, particleSize, particleColor1, particleColor2, particleShape, particleEmissionRate,
-  targetPoints, baselinePoints, showTarget, showBaseline, enableTrailDecay, trailDecayFactor, targetResolution,
+  targetPoints, baselinePoints, showTarget, showBaseline, targetEnableTrailDecay, targetTrailDecayFactor, baselineEnableTrailDecay, baselineTrailDecayFactor, targetResolution,
   isEditorMode, onTargetPointsChange, onBaselinePointsChange, onTimeUpdate,
   onPlayStateChange, isLooping
 }, ref) => {
@@ -181,7 +185,8 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
     lastTime: 0,
     lastOrangeProg: 0,
     lastBlueProg: 0,
-    lastEnableTrailDecay: false,
+    lastTargetEnableTrailDecay: false,
+    lastBaselineEnableTrailDecay: false,
     needsRedraw: false,
     particles: [] as any[],
     isRecording: false,
@@ -559,8 +564,10 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
     
     let animationFrameId: number;
     let ctx: CanvasRenderingContext2D | null = null;
-    let trailCanvas: HTMLCanvasElement | null = null;
-    let trailCtx: CanvasRenderingContext2D | null = null;
+    let targetTrailCanvas: HTMLCanvasElement | null = null;
+    let targetTrailCtx: CanvasRenderingContext2D | null = null;
+    let baselineTrailCanvas: HTMLCanvasElement | null = null;
+    let baselineTrailCtx: CanvasRenderingContext2D | null = null;
     let width = targetResolution.w;
     let height = targetResolution.h;
     let bluePts: {x:number, y:number}[] = [];
@@ -577,14 +584,24 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       ctx = canvas.getContext('2d', { alpha: true });
       padding = Math.max(40, Math.min(width, height) * 0.08);
 
-      if (enableTrailDecay) {
-        trailCanvas = document.createElement('canvas');
-        trailCanvas.width = width;
-        trailCanvas.height = height;
-        trailCtx = trailCanvas.getContext('2d', { alpha: true });
+      if (targetEnableTrailDecay) {
+        targetTrailCanvas = document.createElement('canvas');
+        targetTrailCanvas.width = width;
+        targetTrailCanvas.height = height;
+        targetTrailCtx = targetTrailCanvas.getContext('2d', { alpha: true });
       } else {
-        trailCanvas = null;
-        trailCtx = null;
+        targetTrailCanvas = null;
+        targetTrailCtx = null;
+      }
+
+      if (baselineEnableTrailDecay) {
+        baselineTrailCanvas = document.createElement('canvas');
+        baselineTrailCanvas.width = width;
+        baselineTrailCanvas.height = height;
+        baselineTrailCtx = baselineTrailCanvas.getContext('2d', { alpha: true });
+      } else {
+        baselineTrailCanvas = null;
+        baselineTrailCtx = null;
       }
 
       const mapPoints = (pts: {x:number, y:number}[]) => {
@@ -866,7 +883,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
             let p = getPointAtDistance(pts, lengths, dist);
             
             targetCtx.shadowBlur = lineWidth * 4;
-            targetCtx.shadowColor = getCanvasColor(colorValue);
+            targetCtx.shadowColor = getCanvasColor(colorValue) as string;
             targetCtx.fillStyle = getCanvasColor(colorValue);
             
             targetCtx.beginPath();
@@ -1027,9 +1044,8 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
             state.fillProgress = 0;
             state.lastOrangeProg = 0;
             state.lastBlueProg = 0;
-            if (trailCtx) {
-              trailCtx.clearRect(0, 0, width, height);
-            }
+            if (targetTrailCtx) targetTrailCtx.clearRect(0, 0, width, height);
+            if (baselineTrailCtx) baselineTrailCtx.clearRect(0, 0, width, height);
           } else {
             state.isPlaying = false;
             onPlayStateChange(false);
@@ -1052,65 +1068,100 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
       let orangeProg = 0;
       let blueProg = 0;
 
-      const easeFn = easings[easing] || easings.linear;
-      const getEased = (t: number) => {
-        if (easing === 'customBezier') {
-          return easeFn(t, customBezier.x1, customBezier.y1, customBezier.x2, customBezier.y2);
+      const targetEaseFn = easings[targetEasing] || easings.linear;
+      const getTargetEased = (t: number) => {
+        if (targetEasing === 'customBezier') {
+          return targetEaseFn(t, targetCustomBezier.x1, targetCustomBezier.y1, targetCustomBezier.x2, targetCustomBezier.y2);
         }
-        return easeFn(t);
+        return targetEaseFn(t);
+      };
+
+      const baselineEaseFn = easings[baselineEasing] || easings.linear;
+      const getBaselineEased = (t: number) => {
+        if (baselineEasing === 'customBezier') {
+          return baselineEaseFn(t, baselineCustomBezier.x1, baselineCustomBezier.y1, baselineCustomBezier.x2, baselineCustomBezier.y2);
+        }
+        return baselineEaseFn(t);
       };
 
       if (mode === 'together') {
-        orangeProg = getEased(state.progress);
-        blueProg = getEased(state.progress);
+        orangeProg = getTargetEased(state.progress);
+        blueProg = getBaselineEased(state.progress);
       } else if (mode === 'staggered') {
         if (state.progress < 0.5) {
-          orangeProg = getEased(state.progress * 2);
+          orangeProg = getTargetEased(state.progress * 2);
           blueProg = 0;
         } else {
           orangeProg = 1;
-          blueProg = getEased((state.progress - 0.5) * 2);
+          blueProg = getBaselineEased((state.progress - 0.5) * 2);
         }
       }
 
       if (state.progress >= 1 && showTarget && showBaseline && revealDuration > 0) {
-        drawFill(getEased(state.fillProgress));
+        drawFill(getTargetEased(state.fillProgress));
       }
 
       let orangePos = null;
       let bluePos = null;
 
-      if (enableTrailDecay && trailCtx && trailCanvas && ctx && !isEditorMode) {
+      if (ctx && !isEditorMode) {
         if (state.isPlaying) {
-          if (orangeProg < state.lastOrangeProg || blueProg < state.lastBlueProg) {
-            trailCtx.clearRect(0, 0, width, height);
-          } else {
-            trailCtx.globalCompositeOperation = 'copy';
-            trailCtx.globalAlpha = 1 - trailDecayFactor;
-            trailCtx.drawImage(trailCtx.canvas, 0.01, 0.01);
-            trailCtx.globalAlpha = 1.0;
-            trailCtx.globalCompositeOperation = 'source-over';
+          if (targetEnableTrailDecay && targetTrailCtx && targetTrailCanvas) {
+            if (orangeProg < state.lastOrangeProg) {
+              targetTrailCtx.clearRect(0, 0, width, height);
+            } else {
+              targetTrailCtx.globalCompositeOperation = 'copy';
+              targetTrailCtx.globalAlpha = 1 - targetTrailDecayFactor;
+              targetTrailCtx.drawImage(targetTrailCtx.canvas, 0.01, 0.01);
+              targetTrailCtx.globalAlpha = 1.0;
+              targetTrailCtx.globalCompositeOperation = 'source-over';
+            }
+            if (showTarget) {
+              const startP = orangeProg < state.lastOrangeProg ? 0 : state.lastOrangeProg;
+              drawLine(targetTrailCtx, orangePts, orangeData.lengths, orangeData.total, startP, orangeProg, line1Color, false);
+            }
           }
-
-          if (showTarget) {
-            const startP = orangeProg < state.lastOrangeProg ? 0 : state.lastOrangeProg;
-            drawLine(trailCtx, orangePts, orangeData.lengths, orangeData.total, startP, orangeProg, line1Color, false);
+          
+          if (baselineEnableTrailDecay && baselineTrailCtx && baselineTrailCanvas) {
+            if (blueProg < state.lastBlueProg) {
+              baselineTrailCtx.clearRect(0, 0, width, height);
+            } else {
+              baselineTrailCtx.globalCompositeOperation = 'copy';
+              baselineTrailCtx.globalAlpha = 1 - baselineTrailDecayFactor;
+              baselineTrailCtx.drawImage(baselineTrailCtx.canvas, 0.01, 0.01);
+              baselineTrailCtx.globalAlpha = 1.0;
+              baselineTrailCtx.globalCompositeOperation = 'source-over';
+            }
+            if (showBaseline) {
+              const startP = blueProg < state.lastBlueProg ? 0 : state.lastBlueProg;
+              drawLine(baselineTrailCtx, bluePts, blueData.lengths, blueData.total, startP, blueProg, line2Color, false);
+            }
           }
-          if (showBaseline) {
-            const startP = blueProg < state.lastBlueProg ? 0 : state.lastBlueProg;
-            drawLine(trailCtx, bluePts, blueData.lengths, blueData.total, startP, blueProg, line2Color, false);
+        } else if (orangeProg !== state.lastOrangeProg || blueProg !== state.lastBlueProg || state.progress === 0 || targetEnableTrailDecay !== state.lastTargetEnableTrailDecay || baselineEnableTrailDecay !== state.lastBaselineEnableTrailDecay || state.needsRedraw) {
+          if (targetEnableTrailDecay && targetTrailCtx) {
+            targetTrailCtx.clearRect(0, 0, width, height);
+            if (showTarget) drawLine(targetTrailCtx, orangePts, orangeData.lengths, orangeData.total, 0, orangeProg, line1Color, false);
           }
-        } else if (orangeProg !== state.lastOrangeProg || blueProg !== state.lastBlueProg || state.progress === 0 || enableTrailDecay !== state.lastEnableTrailDecay || state.needsRedraw) {
-          trailCtx.clearRect(0, 0, width, height);
-          if (showTarget) drawLine(trailCtx, orangePts, orangeData.lengths, orangeData.total, 0, orangeProg, line1Color, false);
-          if (showBaseline) drawLine(trailCtx, bluePts, blueData.lengths, blueData.total, 0, blueProg, line2Color, false);
+          if (baselineEnableTrailDecay && baselineTrailCtx) {
+            baselineTrailCtx.clearRect(0, 0, width, height);
+            if (showBaseline) drawLine(baselineTrailCtx, bluePts, blueData.lengths, blueData.total, 0, blueProg, line2Color, false);
+          }
           state.needsRedraw = false;
         }
 
-        ctx.drawImage(trailCanvas, 0, 0);
+        if (targetEnableTrailDecay && targetTrailCanvas) {
+          ctx.drawImage(targetTrailCanvas, 0, 0);
+          orangePos = showTarget ? drawLine(ctx, orangePts, orangeData.lengths, orangeData.total, orangeProg, orangeProg, line1Color, true) : null;
+        } else {
+          orangePos = showTarget ? drawLine(ctx, orangePts, orangeData.lengths, orangeData.total, 0, orangeProg, line1Color, true) : null;
+        }
 
-        orangePos = showTarget ? drawLine(ctx, orangePts, orangeData.lengths, orangeData.total, orangeProg, orangeProg, line1Color, true) : null;
-        bluePos = showBaseline ? drawLine(ctx, bluePts, blueData.lengths, blueData.total, blueProg, blueProg, line2Color, true) : null;
+        if (baselineEnableTrailDecay && baselineTrailCanvas) {
+          ctx.drawImage(baselineTrailCanvas, 0, 0);
+          bluePos = showBaseline ? drawLine(ctx, bluePts, blueData.lengths, blueData.total, blueProg, blueProg, line2Color, true) : null;
+        } else {
+          bluePos = showBaseline ? drawLine(ctx, bluePts, blueData.lengths, blueData.total, 0, blueProg, line2Color, true) : null;
+        }
       } else if (ctx) {
         orangePos = showTarget ? drawLine(ctx, orangePts, orangeData.lengths, orangeData.total, 0, orangeProg, line1Color, true) : null;
         bluePos = showBaseline ? drawLine(ctx, bluePts, blueData.lengths, blueData.total, 0, blueProg, line2Color, true) : null;
@@ -1118,7 +1169,8 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
 
       state.lastOrangeProg = orangeProg;
       state.lastBlueProg = blueProg;
-      state.lastEnableTrailDecay = enableTrailDecay;
+      state.lastTargetEnableTrailDecay = targetEnableTrailDecay;
+      state.lastBaselineEnableTrailDecay = baselineEnableTrailDecay;
 
       if (state.isPlaying && !isEditorMode && showParticles) {
         if (orangePos && orangeProg < 1) spawnParticles(orangePos, particleColor1);
@@ -1208,10 +1260,10 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
     };
   }, [
     duration, revealDuration, mode, backgroundColor, showGrid, showBloom, backgroundImage,
-    lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier, line1Color, line2Color, lineCap, outlineCap,
+    lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, targetEasing, targetCustomBezier, baselineEasing, baselineCustomBezier, line1Color, line2Color, lineCap, outlineCap,
     showParticles, particleSize, particleColor1, particleColor2, particleShape, particleEmissionRate,
     targetPoints, baselinePoints, targetResolution.w, targetResolution.h,
-    isEditorMode, showTarget, showBaseline, enableTrailDecay, trailDecayFactor, isLooping
+    isEditorMode, showTarget, showBaseline, targetEnableTrailDecay, targetTrailDecayFactor, baselineEnableTrailDecay, baselineTrailDecayFactor, isLooping
   ]);
 
   useEffect(() => {
@@ -1219,7 +1271,7 @@ const AnimationCanvas = forwardRef<AnimationCanvasRef, Props>(({
   }, [
     lineWidth, lineStyle, lineShape, lineDashLength, line1Color, line2Color, lineCap,
     outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, outlineCap, showOutline,
-    pointRadius, headShape, easing, customBezier, targetPoints, baselinePoints, showTarget, showBaseline
+    pointRadius, headShape, targetEasing, targetCustomBezier, baselineEasing, baselineCustomBezier, targetPoints, baselinePoints, showTarget, showBaseline
   ]);
 
   return (

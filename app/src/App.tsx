@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Play, Pause, Square, RotateCcw, Download, Video, Film, Grid, Settings2, Image as ImageIcon, Trash2, Upload, RefreshCw, Save, Activity, Monitor, Edit3, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Clock, Eye, EyeOff, FolderOpen, Lightbulb, Maximize, Sparkles, Database, Check, Repeat } from 'lucide-react';
+import { Play, Pause, Square, RotateCcw, Download, Video, Film, Grid, Settings2, Image as ImageIcon, Trash2, Upload, RefreshCw, Save, Activity, Monitor, Edit3, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Clock, Eye, EyeOff, FolderOpen, Lightbulb, Maximize, Sparkles, Database, Check, Repeat, ArrowLeftRight } from 'lucide-react';
 import AnimationCanvas, { AnimationCanvasRef } from './components/AnimationCanvas';
 import ColorPicker from './components/ColorPicker';
 import { ColorValue } from './types';
@@ -108,8 +108,10 @@ const DEFAULT_SETTINGS = {
   outline2Color: { type: 'solid', color: '#00a8cc' } as ColorValue,
   pointRadius: 4,
   headShape: 'circle' as 'circle' | 'triangle' | 'square' | 'star' | 'diamond' | 'hex',
-  easing: 'linear',
-  customBezier: { x1: 0.25, y1: 0.1, x2: 0.25, y2: 1.0 },
+  targetEasing: 'linear',
+  targetCustomBezier: { x1: 0.25, y1: 0.1, x2: 0.25, y2: 1.0 },
+  baselineEasing: 'linear',
+  baselineCustomBezier: { x1: 0.25, y1: 0.1, x2: 0.25, y2: 1.0 },
   line1Color: { type: 'solid', color: '#ff5e00' } as ColorValue, // Target
   line2Color: { type: 'solid', color: '#00d2ff' } as ColorValue, // Baseline
   lineCap: 'round' as 'round' | 'butt' | 'square',
@@ -134,8 +136,10 @@ const DEFAULT_SETTINGS = {
   ],
   showTarget: true,
   showBaseline: true,
-  enableTrailDecay: false,
-  trailDecayFactor: 0.05
+  targetEnableTrailDecay: false,
+  targetTrailDecayFactor: 0.05,
+  baselineEnableTrailDecay: false,
+  baselineTrailDecayFactor: 0.05
 };
 
 export default function App() {
@@ -172,8 +176,10 @@ export default function App() {
   const [outline2Color, setOutline2Color] = useState<ColorValue>(DEFAULT_SETTINGS.outline2Color);
   const [pointRadius, setPointRadius] = useState(DEFAULT_SETTINGS.pointRadius);
   const [headShape, setHeadShape] = useState(DEFAULT_SETTINGS.headShape);
-  const [easing, setEasing] = useState(DEFAULT_SETTINGS.easing);
-  const [customBezier, setCustomBezier] = useState(DEFAULT_SETTINGS.customBezier);
+  const [targetEasing, setTargetEasing] = useState(DEFAULT_SETTINGS.targetEasing);
+  const [targetCustomBezier, setTargetCustomBezier] = useState(DEFAULT_SETTINGS.targetCustomBezier);
+  const [baselineEasing, setBaselineEasing] = useState(DEFAULT_SETTINGS.baselineEasing);
+  const [baselineCustomBezier, setBaselineCustomBezier] = useState(DEFAULT_SETTINGS.baselineCustomBezier);
   const [line1Color, setLine1Color] = useState<ColorValue>(DEFAULT_SETTINGS.line1Color);
   const [line2Color, setLine2Color] = useState<ColorValue>(DEFAULT_SETTINGS.line2Color);
   const [lineCap, setLineCap] = useState(DEFAULT_SETTINGS.lineCap);
@@ -188,8 +194,10 @@ export default function App() {
   const [baselinePoints, setBaselinePoints] = useState(DEFAULT_SETTINGS.baselinePoints);
   const [showTarget, setShowTarget] = useState(true);
   const [showBaseline, setShowBaseline] = useState(true);
-  const [enableTrailDecay, setEnableTrailDecay] = useState(DEFAULT_SETTINGS.enableTrailDecay);
-  const [trailDecayFactor, setTrailDecayFactor] = useState(DEFAULT_SETTINGS.trailDecayFactor);
+  const [targetEnableTrailDecay, setTargetEnableTrailDecay] = useState(DEFAULT_SETTINGS.targetEnableTrailDecay);
+  const [targetTrailDecayFactor, setTargetTrailDecayFactor] = useState(DEFAULT_SETTINGS.targetTrailDecayFactor);
+  const [baselineEnableTrailDecay, setBaselineEnableTrailDecay] = useState(DEFAULT_SETTINGS.baselineEnableTrailDecay);
+  const [baselineTrailDecayFactor, setBaselineTrailDecayFactor] = useState(DEFAULT_SETTINGS.baselineTrailDecayFactor);
 
   // Save System State
   const [savedGraphs, setSavedGraphs] = useState<{id: string, name: string, settings: any}[]>([]);
@@ -199,6 +207,7 @@ export default function App() {
 
   // Prompt State
   const [promptConfig, setPromptConfig] = useState<{isOpen: boolean, title: string, value: string, onConfirm: (val: string) => void} | null>(null);
+  const [confirmConfig, setConfirmConfig] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void} | null>(null);
 
   // UI State
   const [mouseNearLeft, setMouseNearLeft] = useState(false);
@@ -313,9 +322,9 @@ export default function App() {
   };
 
   const getCurrentSettings = () => ({
-    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, backgroundImage, lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier,
+    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, backgroundImage, lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, targetEasing, targetCustomBezier, baselineEasing, baselineCustomBezier,
     line1Color, line2Color, lineCap, outlineCap, showParticles, particleSize, particleColor1, particleColor2, particleShape,
-    particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline, enableTrailDecay, trailDecayFactor
+    particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline, targetEnableTrailDecay, targetTrailDecayFactor, baselineEnableTrailDecay, baselineTrailDecayFactor
   });
 
   useEffect(() => {
@@ -331,9 +340,9 @@ export default function App() {
       setHasUnsavedChanges(false);
     }
   }, [
-    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, backgroundImage, lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, easing, customBezier,
+    duration, revealDuration, mode, resolution, bgColor, showGrid, showBloom, backgroundImage, lineWidth, lineStyle, lineShape, lineDashLength, showOutline, outlineWidth, outlineStyle, outlineShape, outlineDashLength, outline1Color, outline2Color, pointRadius, headShape, targetEasing, targetCustomBezier, baselineEasing, baselineCustomBezier,
     line1Color, line2Color, lineCap, outlineCap, showParticles, particleSize, particleColor1, particleColor2, particleShape,
-    particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline, enableTrailDecay, trailDecayFactor,
+    particleEmissionRate, targetPoints, baselinePoints, showTarget, showBaseline, targetEnableTrailDecay, targetTrailDecayFactor, baselineEnableTrailDecay, baselineTrailDecayFactor,
     currentGraphId, savedGraphs
   ]);
 
@@ -359,8 +368,14 @@ export default function App() {
     if (s.outline2Color !== undefined) setOutline2Color(parseColorValue(s.outline2Color));
     if (s.pointRadius !== undefined) setPointRadius(s.pointRadius);
     if (s.headShape !== undefined) setHeadShape(s.headShape);
-    if (s.easing !== undefined) setEasing(s.easing);
-    if (s.customBezier !== undefined) setCustomBezier(s.customBezier);
+    if (s.targetEasing !== undefined) setTargetEasing(s.targetEasing);
+    else if (s.easing !== undefined) setTargetEasing(s.easing);
+    if (s.targetCustomBezier !== undefined) setTargetCustomBezier(s.targetCustomBezier);
+    else if (s.customBezier !== undefined) setTargetCustomBezier(s.customBezier);
+    if (s.baselineEasing !== undefined) setBaselineEasing(s.baselineEasing);
+    else if (s.easing !== undefined) setBaselineEasing(s.easing);
+    if (s.baselineCustomBezier !== undefined) setBaselineCustomBezier(s.baselineCustomBezier);
+    else if (s.customBezier !== undefined) setBaselineCustomBezier(s.customBezier);
     if (s.line1Color !== undefined) setLine1Color(parseColorValue(s.line1Color));
     if (s.line2Color !== undefined) setLine2Color(parseColorValue(s.line2Color));
     if (s.lineCap !== undefined) setLineCap(s.lineCap);
@@ -375,8 +390,14 @@ export default function App() {
     if (s.baselinePoints !== undefined) setBaselinePoints(JSON.parse(JSON.stringify(s.baselinePoints)));
     if (s.showTarget !== undefined) setShowTarget(s.showTarget);
     if (s.showBaseline !== undefined) setShowBaseline(s.showBaseline);
-    if (s.enableTrailDecay !== undefined) setEnableTrailDecay(s.enableTrailDecay);
-    if (s.trailDecayFactor !== undefined) setTrailDecayFactor(s.trailDecayFactor);
+    if (s.targetEnableTrailDecay !== undefined) setTargetEnableTrailDecay(s.targetEnableTrailDecay);
+    else if (s.enableTrailDecay !== undefined) setTargetEnableTrailDecay(s.enableTrailDecay);
+    if (s.targetTrailDecayFactor !== undefined) setTargetTrailDecayFactor(s.targetTrailDecayFactor);
+    else if (s.trailDecayFactor !== undefined) setTargetTrailDecayFactor(s.trailDecayFactor);
+    if (s.baselineEnableTrailDecay !== undefined) setBaselineEnableTrailDecay(s.baselineEnableTrailDecay);
+    else if (s.enableTrailDecay !== undefined) setBaselineEnableTrailDecay(s.enableTrailDecay);
+    if (s.baselineTrailDecayFactor !== undefined) setBaselineTrailDecayFactor(s.baselineTrailDecayFactor);
+    else if (s.trailDecayFactor !== undefined) setBaselineTrailDecayFactor(s.trailDecayFactor);
   };
 
   const openPrompt = (title: string, defaultValue: string, onConfirm: (val: string) => void) => {
@@ -547,8 +568,10 @@ export default function App() {
     setOutline2Color(DEFAULT_SETTINGS.outline2Color);
     setPointRadius(DEFAULT_SETTINGS.pointRadius);
     setHeadShape(DEFAULT_SETTINGS.headShape);
-    setEasing(DEFAULT_SETTINGS.easing);
-    setCustomBezier(DEFAULT_SETTINGS.customBezier);
+    setTargetEasing(DEFAULT_SETTINGS.targetEasing);
+    setTargetCustomBezier(DEFAULT_SETTINGS.targetCustomBezier);
+    setBaselineEasing(DEFAULT_SETTINGS.baselineEasing);
+    setBaselineCustomBezier(DEFAULT_SETTINGS.baselineCustomBezier);
     setLine1Color(DEFAULT_SETTINGS.line1Color);
     setLine2Color(DEFAULT_SETTINGS.line2Color);
     setLineCap(DEFAULT_SETTINGS.lineCap);
@@ -563,8 +586,10 @@ export default function App() {
     setBaselinePoints(JSON.parse(JSON.stringify(DEFAULT_SETTINGS.baselinePoints)));
     setShowTarget(DEFAULT_SETTINGS.showTarget);
     setShowBaseline(DEFAULT_SETTINGS.showBaseline);
-    setEnableTrailDecay(DEFAULT_SETTINGS.enableTrailDecay);
-    setTrailDecayFactor(DEFAULT_SETTINGS.trailDecayFactor);
+    setTargetEnableTrailDecay(DEFAULT_SETTINGS.targetEnableTrailDecay);
+    setTargetTrailDecayFactor(DEFAULT_SETTINGS.targetTrailDecayFactor);
+    setBaselineEnableTrailDecay(DEFAULT_SETTINGS.baselineEnableTrailDecay);
+    setBaselineTrailDecayFactor(DEFAULT_SETTINGS.baselineTrailDecayFactor);
     setBackgroundImage(null);
   };
 
@@ -720,89 +745,181 @@ export default function App() {
               <input type="range" min="0" max="10" step="0.5" value={revealDuration} onChange={(e) => setRevealDuration(Number(e.target.value))} disabled={isRecording} className="w-full accent-orange-500" />
             </div>
             
-            <div className="space-y-2 pt-2">
-              <label className="flex items-center gap-2 cursor-pointer group">
-                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${enableTrailDecay ? 'bg-orange-500 border-orange-500' : 'border-zinc-600 group-hover:border-zinc-500'}`}>
-                  {enableTrailDecay && <Check className="w-3 h-3 text-white" />}
-                </div>
-                <span className="text-xs text-zinc-300">Enable Trail Decay</span>
-                <input type="checkbox" checked={enableTrailDecay} onChange={(e) => setEnableTrailDecay(e.target.checked)} className="hidden" />
-              </label>
-            </div>
-            
-            {enableTrailDecay && (
+            <div className="space-y-4 pt-2">
+              <h4 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Baseline Animation</h4>
+              
               <div className="space-y-2">
-                <div className="flex justify-between text-xs text-zinc-400"><span>Trail Decay Factor</span><span>{trailDecayFactor.toFixed(2)}</span></div>
-                <input type="range" min="0.01" max="0.50" step="0.01" value={trailDecayFactor} onChange={(e) => setTrailDecayFactor(Number(e.target.value))} className="w-full accent-orange-500" />
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${baselineEnableTrailDecay ? 'bg-orange-500 border-orange-500' : 'border-zinc-600 group-hover:border-zinc-500'}`}>
+                    {baselineEnableTrailDecay && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <span className="text-xs text-zinc-300">Enable Trail Decay</span>
+                  <input type="checkbox" checked={baselineEnableTrailDecay} onChange={(e) => setBaselineEnableTrailDecay(e.target.checked)} className="hidden" />
+                </label>
               </div>
-            )}
-            
-            <div className="space-y-2">
-              <span className="text-xs text-zinc-400 block">Easing Curve</span>
-              <select 
-                value={easing} 
-                onChange={e => setEasing(e.target.value)}
-                className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
-              >
-                <option value="linear">Linear</option>
-                <option value="easeInSine">EaseInSine</option>
-                <option value="easeOutSine">EaseOutSine</option>
-                <option value="easeInOutSine">EaseInOutSine</option>
-                <option value="easeInQuad">EaseInQuad</option>
-                <option value="easeOutQuad">EaseOutQuad</option>
-                <option value="easeInOutQuad">EaseInOutQuad</option>
-                <option value="easeInCubic">EaseInCubic</option>
-                <option value="easeOutCubic">EaseOutCubic</option>
-                <option value="easeInOutCubic">EaseInOutCubic</option>
-                <option value="easeInQuart">EaseInQuart</option>
-                <option value="easeOutQuart">EaseOutQuart</option>
-                <option value="easeInOutQuart">EaseInOutQuart</option>
-                <option value="easeInQuint">EaseInQuint</option>
-                <option value="easeOutQuint">EaseOutQuint</option>
-                <option value="easeInOutQuint">EaseInOutQuint</option>
-                <option value="easeInExpo">EaseInExpo</option>
-                <option value="easeOutExpo">EaseOutExpo</option>
-                <option value="easeInOutExpo">EaseInOutExpo</option>
-                <option value="easeInCirc">EaseInCirc</option>
-                <option value="easeOutCirc">EaseOutCirc</option>
-                <option value="easeInOutCirc">EaseInOutCirc</option>
-                <option value="easeInBack">EaseInBack</option>
-                <option value="easeOutBack">EaseOutBack</option>
-                <option value="easeInOutBack">EaseInOutBack</option>
-                <option value="easeInElastic">EaseInElastic</option>
-                <option value="easeOutElastic">EaseOutElastic</option>
-                <option value="easeInOutElastic">EaseInOutElastic</option>
-                <option value="easeInBounce">EaseInBounce</option>
-                <option value="easeOutBounce">EaseOutBounce</option>
-                <option value="easeInOutBounce">EaseInOutBounce</option>
-                <option value="smoothStep">SmoothStep</option>
-                <option value="smootherStep">SmootherStep</option>
-                <option value="spring">Spring</option>
-                <option value="hermite">Hermite</option>
-                <option value="customBezier">Custom Bezier</option>
-              </select>
+              
+              {baselineEnableTrailDecay && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs text-zinc-400"><span>Trail Decay Factor</span><span>{baselineTrailDecayFactor.toFixed(2)}</span></div>
+                  <input type="range" min="0.01" max="0.50" step="0.01" value={baselineTrailDecayFactor} onChange={(e) => setBaselineTrailDecayFactor(Number(e.target.value))} className="w-full accent-orange-500" />
+                </div>
+              )}
+              
+              <div className="space-y-2">
+                <span className="text-xs text-zinc-400 block">Easing Curve</span>
+                <select 
+                  value={baselineEasing} 
+                  onChange={e => setBaselineEasing(e.target.value)}
+                  className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
+                >
+                  <option value="linear">Linear</option>
+                  <option value="easeInSine">EaseInSine</option>
+                  <option value="easeOutSine">EaseOutSine</option>
+                  <option value="easeInOutSine">EaseInOutSine</option>
+                  <option value="easeInQuad">EaseInQuad</option>
+                  <option value="easeOutQuad">EaseOutQuad</option>
+                  <option value="easeInOutQuad">EaseInOutQuad</option>
+                  <option value="easeInCubic">EaseInCubic</option>
+                  <option value="easeOutCubic">EaseOutCubic</option>
+                  <option value="easeInOutCubic">EaseInOutCubic</option>
+                  <option value="easeInQuart">EaseInQuart</option>
+                  <option value="easeOutQuart">EaseOutQuart</option>
+                  <option value="easeInOutQuart">EaseInOutQuart</option>
+                  <option value="easeInQuint">EaseInQuint</option>
+                  <option value="easeOutQuint">EaseOutQuint</option>
+                  <option value="easeInOutQuint">EaseInOutQuint</option>
+                  <option value="easeInExpo">EaseInExpo</option>
+                  <option value="easeOutExpo">EaseOutExpo</option>
+                  <option value="easeInOutExpo">EaseInOutExpo</option>
+                  <option value="easeInCirc">EaseInCirc</option>
+                  <option value="easeOutCirc">EaseOutCirc</option>
+                  <option value="easeInOutCirc">EaseInOutCirc</option>
+                  <option value="easeInBack">EaseInBack</option>
+                  <option value="easeOutBack">EaseOutBack</option>
+                  <option value="easeInOutBack">EaseInOutBack</option>
+                  <option value="easeInElastic">EaseInElastic</option>
+                  <option value="easeOutElastic">EaseOutElastic</option>
+                  <option value="easeInOutElastic">EaseInOutElastic</option>
+                  <option value="easeInBounce">EaseInBounce</option>
+                  <option value="easeOutBounce">EaseOutBounce</option>
+                  <option value="easeInOutBounce">EaseInOutBounce</option>
+                  <option value="smoothStep">SmoothStep</option>
+                  <option value="smootherStep">SmootherStep</option>
+                  <option value="spring">Spring</option>
+                  <option value="hermite">Hermite</option>
+                  <option value="customBezier">Custom Bezier</option>
+                </select>
+              </div>
+
+              {baselineEasing === 'customBezier' && (
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-zinc-500 uppercase">X1</span>
+                    <DraggableInput step={0.01} value={baselineCustomBezier.x1} onChange={(v: number) => setBaselineCustomBezier({...baselineCustomBezier, x1: v})} className="w-full bg-zinc-900 rounded px-1.5 py-1 text-xs text-zinc-200 border border-white/5" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-zinc-500 uppercase">Y1</span>
+                    <DraggableInput step={0.01} value={baselineCustomBezier.y1} onChange={(v: number) => setBaselineCustomBezier({...baselineCustomBezier, y1: v})} className="w-full bg-zinc-900 rounded px-1.5 py-1 text-xs text-zinc-200 border border-white/5" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-zinc-500 uppercase">X2</span>
+                    <DraggableInput step={0.01} value={baselineCustomBezier.x2} onChange={(v: number) => setBaselineCustomBezier({...baselineCustomBezier, x2: v})} className="w-full bg-zinc-900 rounded px-1.5 py-1 text-xs text-zinc-200 border border-white/5" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-zinc-500 uppercase">Y2</span>
+                    <DraggableInput step={0.01} value={baselineCustomBezier.y2} onChange={(v: number) => setBaselineCustomBezier({...baselineCustomBezier, y2: v})} className="w-full bg-zinc-900 rounded px-1.5 py-1 text-xs text-zinc-200 border border-white/5" />
+                  </div>
+                </div>
+              )}
             </div>
 
-            {easing === 'customBezier' && (
-              <div className="grid grid-cols-4 gap-2">
-                <div className="space-y-1">
-                  <span className="text-[10px] text-zinc-500 uppercase">X1</span>
-                  <DraggableInput step={0.01} value={customBezier.x1} onChange={(v: number) => setCustomBezier({...customBezier, x1: v})} className="w-full bg-zinc-900 rounded px-1.5 py-1 text-xs text-zinc-200 border border-white/5" />
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] text-zinc-500 uppercase">Y1</span>
-                  <DraggableInput step={0.01} value={customBezier.y1} onChange={(v: number) => setCustomBezier({...customBezier, y1: v})} className="w-full bg-zinc-900 rounded px-1.5 py-1 text-xs text-zinc-200 border border-white/5" />
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] text-zinc-500 uppercase">X2</span>
-                  <DraggableInput step={0.01} value={customBezier.x2} onChange={(v: number) => setCustomBezier({...customBezier, x2: v})} className="w-full bg-zinc-900 rounded px-1.5 py-1 text-xs text-zinc-200 border border-white/5" />
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] text-zinc-500 uppercase">Y2</span>
-                  <DraggableInput step={0.01} value={customBezier.y2} onChange={(v: number) => setCustomBezier({...customBezier, y2: v})} className="w-full bg-zinc-900 rounded px-1.5 py-1 text-xs text-zinc-200 border border-white/5" />
-                </div>
+            <div className="space-y-4 pt-4 border-t border-white/5">
+              <h4 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Target Animation</h4>
+              
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${targetEnableTrailDecay ? 'bg-orange-500 border-orange-500' : 'border-zinc-600 group-hover:border-zinc-500'}`}>
+                    {targetEnableTrailDecay && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <span className="text-xs text-zinc-300">Enable Trail Decay</span>
+                  <input type="checkbox" checked={targetEnableTrailDecay} onChange={(e) => setTargetEnableTrailDecay(e.target.checked)} className="hidden" />
+                </label>
               </div>
-            )}
+              
+              {targetEnableTrailDecay && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs text-zinc-400"><span>Trail Decay Factor</span><span>{targetTrailDecayFactor.toFixed(2)}</span></div>
+                  <input type="range" min="0.01" max="0.50" step="0.01" value={targetTrailDecayFactor} onChange={(e) => setTargetTrailDecayFactor(Number(e.target.value))} className="w-full accent-orange-500" />
+                </div>
+              )}
+              
+              <div className="space-y-2">
+                <span className="text-xs text-zinc-400 block">Easing Curve</span>
+                <select 
+                  value={targetEasing} 
+                  onChange={e => setTargetEasing(e.target.value)}
+                  className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
+                >
+                  <option value="linear">Linear</option>
+                  <option value="easeInSine">EaseInSine</option>
+                  <option value="easeOutSine">EaseOutSine</option>
+                  <option value="easeInOutSine">EaseInOutSine</option>
+                  <option value="easeInQuad">EaseInQuad</option>
+                  <option value="easeOutQuad">EaseOutQuad</option>
+                  <option value="easeInOutQuad">EaseInOutQuad</option>
+                  <option value="easeInCubic">EaseInCubic</option>
+                  <option value="easeOutCubic">EaseOutCubic</option>
+                  <option value="easeInOutCubic">EaseInOutCubic</option>
+                  <option value="easeInQuart">EaseInQuart</option>
+                  <option value="easeOutQuart">EaseOutQuart</option>
+                  <option value="easeInOutQuart">EaseInOutQuart</option>
+                  <option value="easeInQuint">EaseInQuint</option>
+                  <option value="easeOutQuint">EaseOutQuint</option>
+                  <option value="easeInOutQuint">EaseInOutQuint</option>
+                  <option value="easeInExpo">EaseInExpo</option>
+                  <option value="easeOutExpo">EaseOutExpo</option>
+                  <option value="easeInOutExpo">EaseInOutExpo</option>
+                  <option value="easeInCirc">EaseInCirc</option>
+                  <option value="easeOutCirc">EaseOutCirc</option>
+                  <option value="easeInOutCirc">EaseInOutCirc</option>
+                  <option value="easeInBack">EaseInBack</option>
+                  <option value="easeOutBack">EaseOutBack</option>
+                  <option value="easeInOutBack">EaseInOutBack</option>
+                  <option value="easeInElastic">EaseInElastic</option>
+                  <option value="easeOutElastic">EaseOutElastic</option>
+                  <option value="easeInOutElastic">EaseInOutElastic</option>
+                  <option value="easeInBounce">EaseInBounce</option>
+                  <option value="easeOutBounce">EaseOutBounce</option>
+                  <option value="easeInOutBounce">EaseInOutBounce</option>
+                  <option value="smoothStep">SmoothStep</option>
+                  <option value="smootherStep">SmootherStep</option>
+                  <option value="spring">Spring</option>
+                  <option value="hermite">Hermite</option>
+                  <option value="customBezier">Custom Bezier</option>
+                </select>
+              </div>
+
+              {targetEasing === 'customBezier' && (
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-zinc-500 uppercase">X1</span>
+                    <DraggableInput step={0.01} value={targetCustomBezier.x1} onChange={(v: number) => setTargetCustomBezier({...targetCustomBezier, x1: v})} className="w-full bg-zinc-900 rounded px-1.5 py-1 text-xs text-zinc-200 border border-white/5" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-zinc-500 uppercase">Y1</span>
+                    <DraggableInput step={0.01} value={targetCustomBezier.y1} onChange={(v: number) => setTargetCustomBezier({...targetCustomBezier, y1: v})} className="w-full bg-zinc-900 rounded px-1.5 py-1 text-xs text-zinc-200 border border-white/5" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-zinc-500 uppercase">X2</span>
+                    <DraggableInput step={0.01} value={targetCustomBezier.x2} onChange={(v: number) => setTargetCustomBezier({...targetCustomBezier, x2: v})} className="w-full bg-zinc-900 rounded px-1.5 py-1 text-xs text-zinc-200 border border-white/5" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-zinc-500 uppercase">Y2</span>
+                    <DraggableInput step={0.01} value={targetCustomBezier.y2} onChange={(v: number) => setTargetCustomBezier({...targetCustomBezier, y2: v})} className="w-full bg-zinc-900 rounded px-1.5 py-1 text-xs text-zinc-200 border border-white/5" />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="h-px bg-white/5"></div>
@@ -879,7 +996,15 @@ export default function App() {
               <span className="text-xs text-zinc-400 block">Line Style</span>
               <select 
                 value={lineStyle} 
-                onChange={e => setLineStyle(e.target.value as any)}
+                onChange={e => {
+                  const newStyle = e.target.value as any;
+                  setLineStyle(newStyle);
+                  if (newStyle === 'shape' && lineDashLength < 10) {
+                    setLineDashLength(10);
+                  } else if (newStyle === 'dotted' && lineDashLength < 5) {
+                    setLineDashLength(5);
+                  }
+                }}
                 className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
               >
                 <option value="solid">Solid</option>
@@ -904,22 +1029,24 @@ export default function App() {
                 </select>
               </div>
             )}
-            <div className="space-y-2">
-              <span className="text-xs text-zinc-400 block">Cap Style</span>
-              <select 
-                value={lineCap} 
-                onChange={e => setLineCap(e.target.value as any)}
-                className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
-              >
-                <option value="round">Round</option>
-                <option value="butt">Flat</option>
-                <option value="square">Square</option>
-              </select>
-            </div>
+            {lineStyle !== 'shape' && (
+              <div className="space-y-2">
+                <span className="text-xs text-zinc-400 block">Cap Style</span>
+                <select 
+                  value={lineCap} 
+                  onChange={e => setLineCap(e.target.value as any)}
+                  className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
+                >
+                  <option value="round">Round</option>
+                  <option value="butt">Flat</option>
+                  <option value="square">Square</option>
+                </select>
+              </div>
+            )}
             {(lineStyle === 'dotted' || lineStyle === 'shape') && (
               <div className="space-y-2">
                 <div className="flex justify-between text-xs text-zinc-400"><span>{lineStyle === 'shape' ? 'Spacing' : 'Dash Length'}</span><span>{lineDashLength}px</span></div>
-                <input type="range" min="1" max="100" step="1" value={lineDashLength} onChange={e => setLineDashLength(Number(e.target.value))} className="w-full accent-orange-500" />
+                <input type="range" min={lineStyle === 'shape' ? 10 : 5} max="100" step="1" value={lineDashLength} onChange={e => setLineDashLength(Number(e.target.value))} className="w-full accent-orange-500" />
               </div>
             )}
 
@@ -972,7 +1099,15 @@ export default function App() {
                   <span className="text-xs text-zinc-400 block">Outline Style</span>
                   <select 
                     value={outlineStyle} 
-                    onChange={e => setOutlineStyle(e.target.value as any)}
+                    onChange={e => {
+                      const newStyle = e.target.value as any;
+                      setOutlineStyle(newStyle);
+                      if (newStyle === 'shape' && outlineDashLength < 10) {
+                        setOutlineDashLength(10);
+                      } else if (newStyle === 'dotted' && outlineDashLength < 5) {
+                        setOutlineDashLength(5);
+                      }
+                    }}
                     className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
                   >
                     <option value="solid">Solid</option>
@@ -997,22 +1132,24 @@ export default function App() {
                     </select>
                   </div>
                 )}
-                <div className="space-y-2">
-                  <span className="text-xs text-zinc-400 block">Cap Style</span>
-                  <select 
-                    value={outlineCap} 
-                    onChange={e => setOutlineCap(e.target.value as any)}
-                    className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
-                  >
-                    <option value="round">Round</option>
-                    <option value="butt">Flat</option>
-                    <option value="square">Square</option>
-                  </select>
-                </div>
+                {outlineStyle !== 'shape' && (
+                  <div className="space-y-2">
+                    <span className="text-xs text-zinc-400 block">Cap Style</span>
+                    <select 
+                      value={outlineCap} 
+                      onChange={e => setOutlineCap(e.target.value as any)}
+                      className="w-full bg-zinc-900 rounded px-2 py-1.5 text-xs text-zinc-200 border border-white/5 focus:border-orange-500/50 outline-none"
+                    >
+                      <option value="round">Round</option>
+                      <option value="butt">Flat</option>
+                      <option value="square">Square</option>
+                    </select>
+                  </div>
+                )}
                 {(outlineStyle === 'dotted' || outlineStyle === 'shape') && (
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs text-zinc-400"><span>{outlineStyle === 'shape' ? 'Spacing' : 'Dash Length'}</span><span>{outlineDashLength}px</span></div>
-                    <input type="range" min="1" max="100" step="1" value={outlineDashLength} onChange={e => setOutlineDashLength(Number(e.target.value))} className="w-full accent-orange-500" />
+                    <input type="range" min={outlineStyle === 'shape' ? 10 : 5} max="100" step="1" value={outlineDashLength} onChange={e => setOutlineDashLength(Number(e.target.value))} className="w-full accent-orange-500" />
                   </div>
                 )}
 
@@ -1163,8 +1300,10 @@ export default function App() {
               outline2Color={outline2Color}
               pointRadius={pointRadius}
               headShape={headShape}
-              easing={easing}
-              customBezier={customBezier}
+              targetEasing={targetEasing}
+              targetCustomBezier={targetCustomBezier}
+              baselineEasing={baselineEasing}
+              baselineCustomBezier={baselineCustomBezier}
               line1Color={line1Color}
               line2Color={line2Color}
               lineCap={lineCap}
@@ -1179,8 +1318,10 @@ export default function App() {
               baselinePoints={baselinePoints}
               showTarget={showTarget}
               showBaseline={showBaseline}
-              enableTrailDecay={enableTrailDecay}
-              trailDecayFactor={trailDecayFactor}
+              targetEnableTrailDecay={targetEnableTrailDecay}
+              targetTrailDecayFactor={targetTrailDecayFactor}
+              baselineEnableTrailDecay={baselineEnableTrailDecay}
+              baselineTrailDecayFactor={baselineTrailDecayFactor}
               targetResolution={resolution}
               isEditorMode={isEditorMode}
               onTargetPointsChange={setTargetPoints}
@@ -1210,9 +1351,41 @@ export default function App() {
 
         {/* Right Sidebar - Data Points */}
         <aside className={`w-[420px] shrink-0 border-l border-white/10 bg-zinc-900/30 overflow-hidden flex flex-col transition-all duration-300 ${showRightSidebar ? 'mr-0' : '-mr-[420px]'}`}>
-          <div className="p-4 border-b border-white/5 shrink-0">
-            <h3 className="text-sm font-medium text-white flex items-center gap-2"><Database className="w-4 h-4"/> Data Points</h3>
-            <p className="text-xs text-zinc-500 mt-1">Values from 0.0 to 1.0</p>
+          <div className="p-4 border-b border-white/5 shrink-0 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-white flex items-center gap-2"><Database className="w-4 h-4"/> Data Points</h3>
+              <p className="text-xs text-zinc-500 mt-1">Values from 0.0 to 1.0</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => {
+                  const temp = [...targetPoints];
+                  setTargetPoints([...baselinePoints]);
+                  setBaselinePoints(temp);
+                }}
+                className="p-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-400 hover:text-white transition-colors"
+                title="Swap Target and Baseline Points"
+              >
+                <ArrowLeftRight className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={() => {
+                  setConfirmConfig({
+                    isOpen: true,
+                    title: "Clear All Data Points",
+                    message: "Are you sure you want to clear all data points for both Baseline and Target? This action cannot be undone.",
+                    onConfirm: () => {
+                      setTargetPoints([]);
+                      setBaselinePoints([]);
+                    }
+                  });
+                }}
+                className="p-1.5 bg-zinc-800 hover:bg-red-500/20 rounded text-zinc-400 hover:text-red-400 transition-colors"
+                title="Clear All Data Points"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
           </div>
           <div className="flex-1 flex overflow-hidden">
             <div className="flex-1 border-r border-white/5 p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
@@ -1225,6 +1398,33 @@ export default function App() {
         </aside>
 
       </div>
+
+      {/* Confirm Modal */}
+      {confirmConfig?.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-white/10 rounded-lg p-6 w-96 shadow-2xl">
+            <h3 className="text-lg font-medium text-white mb-2">{confirmConfig.title}</h3>
+            <p className="text-sm text-zinc-400 mb-6">{confirmConfig.message}</p>
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setConfirmConfig(null)}
+                className="px-4 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-sm text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  confirmConfig.onConfirm();
+                  setConfirmConfig(null);
+                }}
+                className="px-4 py-2 rounded bg-red-500 hover:bg-red-600 text-sm text-white transition-colors"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Prompt Modal */}
       {promptConfig?.isOpen && (
